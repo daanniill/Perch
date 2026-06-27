@@ -142,7 +142,7 @@ function Sidebar({ onNavigate }) {
         )}
         {navItem(
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#8A93A1" strokeWidth="1.6" strokeLinecap="round"><circle cx="9" cy="9" r="7.2"/><path d="M9 5.4v7.2M11 6.6c-.6-.7-1.4-1-2.2-1-1 0-1.9.6-1.9 1.6 0 2.3 4.2 1.2 4.2 3.5 0 1-.9 1.7-2.1 1.7-.9 0-1.7-.3-2.3-1"/></svg>,
-          'Finances', false
+          'Finances', false, () => onNavigate?.('finances')
         )}
       </nav>
 
