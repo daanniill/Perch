@@ -26,8 +26,8 @@ export default function App() {
     setPage(p)
   }
 
-  if (page === 'dashboard')         return <PerchDashboard />
+  if (page === 'dashboard')         return <PerchDashboard onNavigate={navigate} />
   if (page === 'onboarding')        return <PerchOnboarding onNavigate={navigate} />
-  if (page === 'listing-generator') return <PerchListingGenerator />
+  if (page === 'listing-generator') return <PerchListingGenerator onNavigate={navigate} />
   return <PerchLanding />
 }

@@ -134,7 +134,7 @@ function Sidebar({ onNavigate }) {
         )}
         {navItem(
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#8A93A1" strokeWidth="1.6" strokeLinecap="round"><circle cx="9" cy="9" r="7.2"/><line x1="9" y1="5.6" x2="9" y2="12.4"/><line x1="5.6" y1="9" x2="12.4" y2="9"/></svg>,
-          'Create listing', false
+          'Create listing', false, () => onNavigate?.('listing-generator')
         )}
         {navItem(
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#8A93A1" strokeWidth="1.6" strokeLinecap="round"><line x1="3" y1="15" x2="3" y2="9"/><line x1="9" y1="15" x2="9" y2="4"/><line x1="15" y1="15" x2="15" y2="11"/></svg>,
@@ -343,7 +343,7 @@ function RecentSales() {
 
 // ── main component ────────────────────────────────────────────────────────────
 
-export default function PerchDashboard() {
+export default function PerchDashboard({ onNavigate }) {
   const [period, setPeriod] = useState('30d')
   const [gran, setGran] = useState('monthly')
   const isPro = false
@@ -355,7 +355,7 @@ export default function PerchDashboard() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F6F7F9]" style={{ fontFamily: "'Libre Franklin', sans-serif" }}>
-      <Sidebar />
+      <Sidebar onNavigate={onNavigate} />
 
       <main className="flex-1 overflow-y-auto">
         <TopBar />

@@ -38,9 +38,9 @@ function Shimmer({ h = 14, w = '100%', rounded = 8 }) {
 
 // ── sidebar ───────────────────────────────────────────────────────────────────
 
-function Sidebar() {
-  const link = (icon, label, active) => (
-    <div key={label} className="flex items-center gap-[11px] px-[11px] py-[9px] rounded-[10px] text-[13.5px] cursor-pointer transition-colors"
+function Sidebar({ onNavigate }) {
+  const link = (icon, label, active, onClick) => (
+    <div key={label} onClick={onClick} className="flex items-center gap-[11px] px-[11px] py-[9px] rounded-[10px] text-[13.5px] cursor-pointer transition-colors"
       style={active ? { background: '#EAF1FF', color: '#3665F3', fontWeight: 600 } : { color: '#5B6470', fontWeight: 500 }}>
       {icon}{label}
     </div>
@@ -52,7 +52,7 @@ function Sidebar() {
       </div>
       <div className="text-[10.5px] font-semibold tracking-[.09em] text-[#A6ADB8] px-[10px] py-[6px]">MENU</div>
       <nav className="flex flex-col gap-[2px]">
-        {link(<svg width="18" height="18" viewBox="0 0 18 18"><rect x="1.5" y="1.5" width="6.4" height="6.4" rx="1.6" fill="#8A93A1"/><rect x="10.1" y="1.5" width="6.4" height="6.4" rx="1.6" fill="#8A93A1" opacity=".5"/><rect x="1.5" y="10.1" width="6.4" height="6.4" rx="1.6" fill="#8A93A1" opacity=".5"/><rect x="10.1" y="10.1" width="6.4" height="6.4" rx="1.6" fill="#8A93A1"/></svg>, 'Dashboard', false)}
+        {link(<svg width="18" height="18" viewBox="0 0 18 18"><rect x="1.5" y="1.5" width="6.4" height="6.4" rx="1.6" fill="#8A93A1"/><rect x="10.1" y="1.5" width="6.4" height="6.4" rx="1.6" fill="#8A93A1" opacity=".5"/><rect x="1.5" y="10.1" width="6.4" height="6.4" rx="1.6" fill="#8A93A1" opacity=".5"/><rect x="10.1" y="10.1" width="6.4" height="6.4" rx="1.6" fill="#8A93A1"/></svg>, 'Dashboard', false, () => onNavigate?.('dashboard'))}
         {link(<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#8A93A1" strokeWidth="1.6" strokeLinecap="round"><rect x="2" y="3" width="14" height="3.2" rx="1"/><rect x="2" y="9" width="14" height="3.2" rx="1"/><line x1="2" y1="15" x2="10" y2="15"/></svg>, 'Listings', false)}
         {link(<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#3665F3" strokeWidth="1.7" strokeLinecap="round"><circle cx="9" cy="9" r="7.2"/><line x1="9" y1="5.6" x2="9" y2="12.4"/><line x1="5.6" y1="9" x2="12.4" y2="9"/></svg>, 'Create listing', true)}
         {link(<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#8A93A1" strokeWidth="1.6" strokeLinecap="round"><line x1="3" y1="15" x2="3" y2="9"/><line x1="9" y1="15" x2="9" y2="4"/><line x1="15" y1="15" x2="15" y2="11"/></svg>, 'Analytics', false)}
@@ -350,7 +350,7 @@ function DoneState({ onRegenerate }) {
 
 // ── main ──────────────────────────────────────────────────────────────────────
 
-export default function PerchListingGenerator() {
+export default function PerchListingGenerator({ onNavigate }) {
   const [phase, setPhase] = useState('idle') // idle | generating | done
   const timerRef = useRef(null)
 
@@ -368,7 +368,7 @@ export default function PerchListingGenerator() {
         @keyframes shimmer { 0% { background-position:100% 0; } 100% { background-position:-100% 0; } }
       `}</style>
 
-      <Sidebar />
+      <Sidebar onNavigate={onNavigate} />
 
       <main className="flex-1 overflow-y-auto">
         {/* header */}
