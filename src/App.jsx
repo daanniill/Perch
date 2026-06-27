@@ -6,6 +6,7 @@ import PerchListingGenerator from './PerchListingGenerator'
 import PerchListings from './PerchListings'
 import PerchFinances from './PerchFinances'
 import PerchPricing from './PerchPricing'
+import PerchAnalytics from './PerchAnalytics'
 
 function getPage() {
   const h = window.location.hash
@@ -15,6 +16,7 @@ function getPage() {
   if (h === '#/listings')          return 'listings'
   if (h === '#/finances')          return 'finances'
   if (h === '#/pricing')           return 'pricing'
+  if (h === '#/analytics')         return 'analytics'
   return 'landing'
 }
 
@@ -38,5 +40,6 @@ export default function App() {
   if (page === 'listings')          return <PerchListings onNavigate={navigate} />
   if (page === 'finances')          return <PerchFinances onNavigate={navigate} />
   if (page === 'pricing')           return <PerchPricing onNavigate={navigate} />
+  if (page === 'analytics')         return <PerchAnalytics onNavigate={navigate} />
   return <PerchLanding />
 }
