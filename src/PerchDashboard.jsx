@@ -148,7 +148,7 @@ function Sidebar({ onNavigate }) {
 
       <div className="flex-1" />
 
-      <div className="bg-[#16181D] rounded-[13px] p-[14px] mb-[10px] cursor-pointer hover:bg-[#22252D] transition-colors">
+      <div className="bg-[#16181D] rounded-[13px] p-[14px] mb-[10px] cursor-pointer hover:bg-[#22252D] transition-colors" onClick={() => onNavigate?.('pricing')}>
         <div className="flex items-center gap-[7px]">
           <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="#F5AF02" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 1.8l1.7 4.3L15 7.8l-4.3 1.7L9 13.8 7.3 9.5 3 7.8l4.3-1.7L9 1.8Z"/></svg>
           <span className="text-[12.5px] font-bold text-white">Upgrade to Pro</span>
