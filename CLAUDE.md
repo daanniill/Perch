@@ -62,7 +62,15 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ---
 
-## 5. Keep README.md Current
+## 5. README and Documentation Security
+
+Keep the README comprehensive, accurate, and sufficient for an authorized developer to set up, run, test, and understand the project. Document processes, architecture, dependencies, required environment-variable names, and sanitized examples—but never include real secrets, credentials, API keys, tokens, private certificates, production connection strings, personal data, internal infrastructure details, or confidential security procedures.
+
+Use placeholders in examples and maintain an up-to-date `.env.example` containing variable names only. Store sensitive operational documentation in an appropriately access-controlled location rather than the repository.
+
+When updating functionality, dependencies, configuration, setup steps, or developer workflows, update the README in the same change. Before committing documentation, review it for accidentally exposed sensitive data. If a secret may have been committed, flag it immediately; removing it from the current file is not sufficient, and the secret must be rotated and removed from repository history.
+
+## 7. Keep README.md Current
 
 **Every new dependency must be documented the moment it is added.**
 
@@ -73,7 +81,7 @@ When you install a package or change the setup in any way:
 
 The test: a developer who has never seen this repo should be able to clone it and run it successfully using only `README.md`.
 
-## 6. Clear Git Commit History
+## 8. Clear Git Commit History
 
 **One logical feature or change per commit. Commit messages must explain why, not just what.**
 
