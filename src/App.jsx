@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useUser } from '@stackframe/stack'
 import PerchLanding from './PerchLanding'
 import PerchDashboard from './PerchDashboard'
 import PerchOnboarding from './PerchOnboarding'
@@ -9,8 +10,10 @@ import PerchPricing from './PerchPricing'
 import PerchAnalytics from './PerchAnalytics'
 import PerchSettings from './PerchSettings'
 
+const PROTECTED = new Set(['dashboard', 'listing-generator', 'listings', 'finances', 'analytics', 'settings'])
+
 function getPage() {
-  const h = window.location.hash
+  const h = window.location.hash.split('?')[0]
   if (h === '#/dashboard')         return 'dashboard'
   if (h === '#/onboarding')        return 'onboarding'
   if (h === '#/listing-generator') return 'listing-generator'
@@ -24,12 +27,22 @@ function getPage() {
 
 export default function App() {
   const [page, setPage] = useState(getPage)
+  // or: 'return-null' means useUser() returns null (not a redirect) when logged out
+  const user = useUser({ or: 'return-null' })
 
   useEffect(() => {
     const handler = () => setPage(getPage())
     window.addEventListener('hashchange', handler)
     return () => window.removeEventListener('hashchange', handler)
   }, [])
+
+  // Redirect unauthenticated users away from protected routes
+  useEffect(() => {
+    if (user === null && PROTECTED.has(page)) {
+      window.location.hash = '#/onboarding'
+      setPage('onboarding')
+    }
+  }, [user, page])
 
   function navigate(p) {
     window.location.hash = `#/${p}`

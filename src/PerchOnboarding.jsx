@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useStackApp, useUser } from '@stackframe/stack'
+import { apiFetch } from './lib/stackauth'
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -111,54 +113,63 @@ function BrandPanel() {
 // ── step 1: create account ────────────────────────────────────────────────────
 
 function Step1({ onNext }) {
-  const [form, setForm] = useState({ name: 'Jordan Fields', email: 'jordan@example.com', pw: '................', pw2: '................' })
-  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
+  const stackApp = useStackApp()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function handleGoogle() {
+    setLoading(true)
+    setError(null)
+    try {
+      await stackApp.signInWithOAuth({ provider: 'google' })
+      // signInWithOAuth redirects — if we reach here the redirect was cancelled
+    } catch (err) {
+      setError('Google sign-in failed. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div style={{ animation: 'fadeUp .35s ease' }}>
       <div className="text-[23px] font-bold tracking-[-0.02em]">Create your account</div>
       <div className="text-[13px] text-[#8A93A1] mt-[3px]">Free to start — no card required.</div>
 
-      {/* Google */}
-      <button className="w-full mt-[13px] flex items-center justify-center gap-[10px] bg-white border border-[#E0E3E9] font-semibold text-[14px] py-[9px] rounded-[11px] cursor-pointer text-[#16181D] hover:bg-[#FAFBFC] hover:border-[#CFD5DE] transition-colors" style={{ fontFamily: 'inherit' }}>
-        <svg width="18" height="18" viewBox="0 0 18 18">
-          <path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.7H9v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.7-3.9 2.7-6.5Z"/>
-          <path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.2c-.8.5-1.8.9-3.1.9-2.4 0-4.4-1.6-5.1-3.8H.9v2.3A9 9 0 0 0 9 18Z"/>
-          <path fill="#FBBC05" d="M3.9 10.7a5.4 5.4 0 0 1 0-3.4V5H.9a9 9 0 0 0 0 8l3-2.3Z"/>
-          <path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .9 5l3 2.3C4.6 5.2 6.6 3.6 9 3.6Z"/>
-        </svg>
-        Continue with Google
+      {error && (
+        <div className="mt-3 text-[13px] text-[#E53238] bg-[#FFF0F0] border border-[#FFCDD0] rounded-[10px] px-4 py-3">
+          {error}
+        </div>
+      )}
+
+      {/* Google OAuth */}
+      <button
+        onClick={handleGoogle}
+        disabled={loading}
+        className="w-full mt-[13px] flex items-center justify-center gap-[10px] bg-white border border-[#E0E3E9] font-semibold text-[14px] py-[9px] rounded-[11px] cursor-pointer text-[#16181D] hover:bg-[#FAFBFC] hover:border-[#CFD5DE] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        style={{ fontFamily: 'inherit' }}
+      >
+        {loading
+          ? <Spinner borderColor="rgba(0,0,0,.15)" topColor="#16181D" />
+          : (
+            <svg width="18" height="18" viewBox="0 0 18 18">
+              <path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.7H9v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.7-3.9 2.7-6.5Z"/>
+              <path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.2c-.8.5-1.8.9-3.1.9-2.4 0-4.4-1.6-5.1-3.8H.9v2.3A9 9 0 0 0 9 18Z"/>
+              <path fill="#FBBC05" d="M3.9 10.7a5.4 5.4 0 0 1 0-3.4V5H.9a9 9 0 0 0 0 8l3-2.3Z"/>
+              <path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .9 5l3 2.3C4.6 5.2 6.6 3.6 9 3.6Z"/>
+            </svg>
+          )
+        }
+        {loading ? 'Signing in…' : 'Continue with Google'}
       </button>
 
-      <div className="flex items-center gap-3 my-[10px] text-[#B6BCC6] text-[12px]">
-        <div className="flex-1 h-px bg-[#EEF0F4]"/>or<div className="flex-1 h-px bg-[#EEF0F4]"/>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        {[
-          { label: 'Full name',         key: 'name', type: 'text' },
-          { label: 'Email',             key: 'email', type: 'email' },
-          { label: 'Password',          key: 'pw',   type: 'password' },
-          { label: 'Confirm password',  key: 'pw2',  type: 'password' },
-        ].map(({ label, key, type }) => (
-          <div key={key}>
-            <div className="text-[12px] font-semibold text-[#5B6470] mb-1">{label}</div>
-            <input
-              type={type}
-              value={form[key]}
-              onChange={set(key)}
-              className="w-full border border-[#E0E3E9] rounded-[10px] px-[13px] py-[10px] text-[14px] outline-none focus:border-[#3665F3] focus:ring-[3px] focus:ring-[rgba(54,101,243,.12)] transition-all"
-              style={{ fontFamily: 'inherit' }}
-            />
-          </div>
-        ))}
-      </div>
-
-      <button onClick={onNext} className="w-full mt-[14px] text-white font-semibold text-[14.5px] py-3 rounded-[12px] cursor-pointer hover:bg-[#2553c9] transition-colors" style={{ background: '#3665F3', border: 'none', fontFamily: 'inherit', boxShadow: '0 2px 6px rgba(54,101,243,.3)' }}>
-        Create account
-      </button>
-      <div className="text-center text-[12.5px] text-[#A6ADB8] mt-[10px]">
-        Already have an account? <span className="text-[#3665F3] font-semibold cursor-pointer">Sign in</span>
+      <div className="text-center text-[12.5px] text-[#A6ADB8] mt-[14px]">
+        Already have an account?{' '}
+        <span
+          onClick={() => stackApp.signInWithOAuth({ provider: 'google' })}
+          className="text-[#3665F3] font-semibold cursor-pointer"
+        >
+          Sign in
+        </span>
       </div>
     </div>
   )
@@ -168,14 +179,23 @@ function Step1({ onNext }) {
 
 function Step2({ onNext, onBack }) {
   const [connecting, setConnecting] = useState(false)
-  const timerRef = useRef(null)
+  const [error, setError] = useState(null)
 
-  function handleConnect() {
+  async function handleConnect() {
     if (connecting) return
     setConnecting(true)
-    timerRef.current = setTimeout(() => { setConnecting(false); onNext() }, 1300)
+    setError(null)
+    try {
+      const res = await apiFetch('/api/ebay/auth-url')
+      if (!res.ok) throw new Error('Could not generate eBay auth URL')
+      const { url } = await res.json()
+      // Full browser redirect to eBay OAuth — eBay will call back to /auth/ebay/callback
+      window.location.href = url
+    } catch (err) {
+      setError(err.message)
+      setConnecting(false)
+    }
   }
-  useEffect(() => () => clearTimeout(timerRef.current), [])
 
   const perms = [
     { label: 'View your active & sold listings',      bg: '#EEF5DC', color: '#5C8A00', plus: false },
@@ -188,6 +208,12 @@ function Step2({ onNext, onBack }) {
     <div style={{ animation: 'fadeUp .35s ease' }}>
       <div className="text-[26px] font-bold tracking-[-0.02em]">Connect your eBay store</div>
       <div className="text-[14px] text-[#8A93A1] mt-[6px] leading-[1.5]">Perch reads your store data through eBay's secure connection. We never see your password.</div>
+
+      {error && (
+        <div className="mt-3 text-[13px] text-[#E53238] bg-[#FFF0F0] border border-[#FFCDD0] rounded-[10px] px-4 py-3">
+          {error}
+        </div>
+      )}
 
       <div className="border border-[#EEF0F4] rounded-[14px] p-[20px] mt-[22px]" style={{ boxShadow: '0 1px 2px rgba(16,24,40,.03)' }}>
         <div className="text-[12px] font-semibold text-[#8A93A1] tracking-[.03em]">PERCH WILL BE ABLE TO</div>
@@ -230,32 +256,43 @@ function Step2({ onNext, onBack }) {
 // ── step 3: syncing ───────────────────────────────────────────────────────────
 
 function Step3({ onDone }) {
-  const [pct, setPct] = useState(0)
+  const [status, setStatus] = useState({ syncing: true, progress: 0, listingCount: 0, orderCount: 0, storeName: null })
   const ivRef = useRef(null)
-  const tRef  = useRef(null)
+  const doneRef = useRef(false)
+
+  const poll = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/ebay/sync-status')
+      if (!res.ok) return
+      const data = await res.json()
+      setStatus(data)
+      if (!data.syncing && data.progress === 100 && !doneRef.current) {
+        doneRef.current = true
+        clearInterval(ivRef.current)
+        setTimeout(onDone, 800)
+      }
+    } catch {}
+  }, [onDone])
 
   useEffect(() => {
-    let done = false
-    ivRef.current = setInterval(() => {
-      setPct(p => {
-        const next = p + 3
-        if (next >= 100) {
-          clearInterval(ivRef.current)
-          if (!done) { done = true; tRef.current = setTimeout(onDone, 700) }
-          return 100
-        }
-        return next
-      })
-    }, 80)
-    return () => { clearInterval(ivRef.current); clearTimeout(tRef.current) }
-  // onDone is stable: it closes over setStep which React guarantees is stable
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    // Kick off sync then start polling
+    apiFetch('/api/ebay/sync', { method: 'POST' })
+    ivRef.current = setInterval(poll, 2000)
+    poll()
+    return () => clearInterval(ivRef.current)
+  }, [poll])
 
+  const pct = status.progress
   let prev = 0
-  const items = SYNC_ITEMS.map(it => {
-    const done   = pct >= it.threshold
-    const active = !done && pct >= prev
+  const DYNAMIC_ITEMS = [
+    { label: `Importing ${status.listingCount > 0 ? status.listingCount.toLocaleString() : '…'} listings`, threshold: 30 },
+    { label: `Pulling ${status.orderCount > 0 ? status.orderCount.toLocaleString() : '…'} orders & sales`, threshold: 60 },
+    { label: 'Calculating fees & payouts', threshold: 85 },
+    { label: 'Crunching returns & metrics', threshold: 100 },
+  ]
+  const items = DYNAMIC_ITEMS.map(it => {
+    const done    = pct >= it.threshold
+    const active  = !done && pct >= prev
     const pending = !done && !active
     prev = it.threshold
     return { ...it, done, active, pending, color: pending ? '#A6ADB8' : '#16181D', bg: active ? '#F7F9FC' : 'transparent' }
@@ -263,12 +300,14 @@ function Step3({ onDone }) {
 
   return (
     <div style={{ animation: 'fadeUp .35s ease' }}>
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-semibold text-[#5C8A00] bg-[#EEF5DC] px-[9px] py-1 rounded-full flex items-center gap-[5px]">
-          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#5C8A00" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 6.2l2.2 2.3 4.8-5"/></svg>
-          Connected · Jordan's Finds
-        </span>
-      </div>
+      {status.storeName && (
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold text-[#5C8A00] bg-[#EEF5DC] px-[9px] py-1 rounded-full flex items-center gap-[5px]">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#5C8A00" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 6.2l2.2 2.3 4.8-5"/></svg>
+            Connected · {status.storeName}
+          </span>
+        </div>
+      )}
       <div className="text-[26px] font-bold tracking-[-0.02em] mt-[14px]">Syncing your store…</div>
       <div className="text-[14px] text-[#8A93A1] mt-[6px]">This usually takes under a minute. Hang tight.</div>
 
@@ -293,15 +332,56 @@ function Step3({ onDone }) {
   )
 }
 
+const EXPERIENCE_LEVELS = [
+  { key: 'beginner',     label: 'Just starting',  desc: '< 1 year' },
+  { key: '1-2 years',   label: '1–2 years',       desc: 'Getting steady' },
+  { key: '3+',          label: '3+ years',         desc: 'Experienced' },
+  { key: 'professional', label: 'Pro seller',      desc: 'Full-time' },
+]
+
+const PRIMARY_GOALS = [
+  { key: 'revenue',    label: 'Increase revenue' },
+  { key: 'save_time', label: 'Save time' },
+  { key: 'analytics', label: 'Better analytics' },
+  { key: 'all',       label: 'All of the above' },
+]
+
 // ── step 4: preferences ───────────────────────────────────────────────────────
 
 function Step4({ onNext, onBack }) {
-  const [cats,  setCats]  = useState({ Sneakers: true, Electronics: true })
-  const [voice, setVoice] = useState('friendly')
-  const [goal,  setGoal]  = useState(5000)
+  const [cats,        setCats]        = useState({ Sneakers: true, Electronics: true })
+  const [voice,       setVoice]       = useState('friendly')
+  const [goal,        setGoal]        = useState(5000)
+  const [experience,  setExperience]  = useState('1-2 years')
+  const [primaryGoal, setPrimaryGoal] = useState('revenue')
+  const [saving,      setSaving]      = useState(false)
+  const [error,       setError]       = useState(null)
 
   function toggleCat(name) {
     setCats(c => { const n = { ...c }; n[name] ? delete n[name] : (n[name] = true); return n })
+  }
+
+  async function handleContinue() {
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await apiFetch('/api/user/onboarding', {
+        method: 'POST',
+        body: JSON.stringify({
+          categories: Object.keys(cats),
+          listing_style: voice,
+          monthly_goal: goal,
+          experience_level: experience,
+          primary_goal: primaryGoal,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save preferences')
+      onNext()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -334,8 +414,59 @@ function Step4({ onNext, onBack }) {
         </div>
       </div>
 
+      {/* experience level */}
+      <div className="mt-[20px]">
+        <div className="text-[12.5px] font-semibold text-[#5B6470] mb-2">How long have you been selling on eBay?</div>
+        <div className="grid grid-cols-2 gap-2">
+          {EXPERIENCE_LEVELS.map(({ key, label, desc }) => {
+            const active = experience === key
+            return (
+              <button
+                key={key}
+                onClick={() => setExperience(key)}
+                className="text-left px-[14px] py-[10px] rounded-[12px] cursor-pointer transition-all"
+                style={{
+                  fontFamily: 'inherit',
+                  background: active ? '#EAF1FF' : '#fff',
+                  border: `1.5px solid ${active ? '#3665F3' : '#E7E9EE'}`,
+                  color: active ? '#16181D' : '#5B6470',
+                }}
+              >
+                <div className="text-[13px] font-semibold">{label}</div>
+                <div className="text-[11px] opacity-70 mt-[1px]">{desc}</div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* primary goal */}
+      <div className="mt-[20px]">
+        <div className="text-[12.5px] font-semibold text-[#5B6470] mb-2">What's your primary goal with Perch?</div>
+        <div className="flex flex-wrap gap-2">
+          {PRIMARY_GOALS.map(({ key, label }) => {
+            const active = primaryGoal === key
+            return (
+              <button
+                key={key}
+                onClick={() => setPrimaryGoal(key)}
+                className="px-[15px] py-[9px] rounded-full text-[13px] font-semibold cursor-pointer transition-all"
+                style={{
+                  fontFamily: 'inherit',
+                  background: active ? '#EAF1FF' : '#fff',
+                  border: `1.5px solid ${active ? '#3665F3' : '#E7E9EE'}`,
+                  color: active ? '#3665F3' : '#5B6470',
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       {/* goal slider */}
-      <div className="mt-[22px]">
+      <div className="mt-[20px]">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[12.5px] font-semibold text-[#5B6470]">Monthly profit goal</span>
           <span className="num text-[14px] font-bold text-[#3665F3]">${goal.toLocaleString()}/mo</span>
@@ -348,8 +479,8 @@ function Step4({ onNext, onBack }) {
         />
       </div>
 
-      {/* voice */}
-      <div className="mt-[22px]">
+      {/* listing voice */}
+      <div className="mt-[20px]">
         <div className="text-[12.5px] font-semibold text-[#5B6470] mb-2">Listing writing style</div>
         <div className="flex gap-2">
           {VOICES.map(({ key, label, desc }) => {
@@ -374,9 +505,23 @@ function Step4({ onNext, onBack }) {
         </div>
       </div>
 
-      <div className="flex gap-[10px] mt-[26px]">
+      {error && (
+        <div className="mt-3 text-[13px] text-[#E53238] bg-[#FFF0F0] border border-[#FFCDD0] rounded-[10px] px-4 py-3">
+          {error}
+        </div>
+      )}
+
+      <div className="flex gap-[10px] mt-[22px]">
         <button onClick={onBack} className="bg-white border border-[#E0E3E9] text-[#5B6470] font-semibold text-[14px] px-5 py-[13px] rounded-[12px] cursor-pointer hover:border-[#16181D] hover:text-[#16181D] transition-colors" style={{ fontFamily: 'inherit' }}>Back</button>
-        <button onClick={onNext} className="flex-1 text-white font-semibold text-[14.5px] py-[13px] rounded-[12px] cursor-pointer hover:bg-[#2553c9] transition-colors" style={{ background: '#3665F3', border: 'none', fontFamily: 'inherit', boxShadow: '0 2px 6px rgba(54,101,243,.3)' }}>Continue</button>
+        <button
+          onClick={handleContinue}
+          disabled={saving}
+          className="flex-1 flex items-center justify-center gap-2 text-white font-semibold text-[14.5px] py-[13px] rounded-[12px] cursor-pointer hover:bg-[#2553c9] transition-colors disabled:opacity-60"
+          style={{ background: '#3665F3', border: 'none', fontFamily: 'inherit', boxShadow: '0 2px 6px rgba(54,101,243,.3)' }}
+        >
+          {saving && <Spinner />}
+          {saving ? 'Saving…' : 'Continue'}
+        </button>
       </div>
     </div>
   )
@@ -385,6 +530,19 @@ function Step4({ onNext, onBack }) {
 // ── step 5: done ──────────────────────────────────────────────────────────────
 
 function Step5({ onGoToDashboard }) {
+  const user = useUser({ or: 'return-null' })
+  const [counts, setCounts] = useState({ listingCount: 0, orderCount: 0, storeName: null })
+
+  useEffect(() => {
+    apiFetch('/api/ebay/sync-status')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setCounts({ listingCount: d.listingCount, orderCount: d.orderCount, storeName: d.storeName }))
+      .catch(() => {})
+  }, [])
+
+  const displayName = user?.displayName ?? 'there'
+  const storeName = counts.storeName ?? 'your store'
+
   return (
     <div className="text-center" style={{ animation: 'fadeUp .35s ease' }}>
       <div className="w-16 h-16 rounded-full bg-[#EEF5DC] flex items-center justify-center mx-auto">
@@ -392,13 +550,17 @@ function Step5({ onGoToDashboard }) {
           <path d="M2.5 6.2l2.2 2.3 4.8-5"/>
         </svg>
       </div>
-      <div className="text-[27px] font-bold tracking-[-0.02em] mt-5">You're all set, Jordan</div>
+      <div className="text-[27px] font-bold tracking-[-0.02em] mt-5">You're all set, {displayName}</div>
       <div className="text-[14px] text-[#8A93A1] mt-2 leading-[1.55] max-w-[380px] mx-auto">
-        Jordan's Finds is connected and synced. Your dashboard is ready with real numbers.
+        {storeName} is connected and synced. Your dashboard is ready with real numbers.
       </div>
 
       <div className="grid grid-cols-3 gap-[10px] mt-[26px]">
-        {[['315', 'listings'], ['1,240', 'orders synced'], ['12mo', 'of history']].map(([val, label]) => (
+        {[
+          [counts.listingCount.toLocaleString(), 'listings'],
+          [counts.orderCount.toLocaleString(),   'orders synced'],
+          ['12mo', 'of history'],
+        ].map(([val, label]) => (
           <div key={label} className="border border-[#EEF0F4] rounded-[12px] p-[14px]">
             <div className="num text-[22px] font-bold">{val}</div>
             <div className="text-[11.5px] text-[#8A93A1] mt-[2px]">{label}</div>
@@ -423,11 +585,48 @@ function Step5({ onGoToDashboard }) {
 // ── main ──────────────────────────────────────────────────────────────────────
 
 export default function PerchOnboarding({ onNavigate }) {
-  const [step, setStep] = useState(1)
+  const user = useUser({ or: 'return-null' })
+  const [step, setStep] = useState(null) // null = loading
+
+  // Determine which step to resume at
+  useEffect(() => {
+    if (user === undefined) return // Stack Auth still loading
+
+    if (!user) {
+      setStep(1) // not logged in → account creation
+      return
+    }
+
+    // Check URL for eBay callback result
+    const params = new URLSearchParams(window.location.search)
+    const ebayParam = params.get('ebay')
+    // Clear the query string without a page reload
+    if (ebayParam) window.history.replaceState({}, '', window.location.pathname + window.location.hash)
+
+    apiFetch('/api/user/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(me => {
+        if (!me) { setStep(1); return }
+        if (me.onboardingComplete) { onNavigate?.('dashboard'); return }
+        if (!me.ebayConnected || ebayParam === 'error') { setStep(2); return }
+        if (ebayParam === 'connected') { setStep(3); return }
+        setStep(4) // eBay connected, no onboarding response yet
+      })
+      .catch(() => setStep(1))
+  }, [user, onNavigate])
 
   const next = () => setStep(s => Math.min(5, s + 1))
   const back = () => setStep(s => Math.max(1, s - 1))
   const toDashboard = () => onNavigate?.('dashboard') ?? (window.location.hash = '#/dashboard')
+
+  // Loading state while we figure out which step
+  if (step === null) {
+    return (
+      <div className="flex h-screen items-center justify-center" style={{ fontFamily: "'Libre Franklin', sans-serif" }}>
+        <Spinner borderColor="rgba(54,101,243,.3)" topColor="#3665F3" size={28} />
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-white" style={{ fontFamily: "'Libre Franklin', sans-serif" }}>
