@@ -62,4 +62,37 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ---
 
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+## 5. Keep README.md Current
+
+**Every new dependency must be documented the moment it is added.**
+
+When you install a package or change the setup in any way:
+- Add it to the **Dependencies** table in `README.md` with its version and a one-line purpose.
+- If the setup process gains a new step (new env var, new third-party account, new CLI command), update the relevant section in `README.md` immediately — in the same commit as the code change.
+- If a dependency is removed, delete its row from the table.
+
+The test: a developer who has never seen this repo should be able to clone it and run it successfully using only `README.md`.
+
+## 6. Clear Git Commit History
+
+**One logical feature or change per commit. Commit messages must explain why, not just what.**
+
+Rules:
+- Each commit covers exactly one feature, fix, or architectural change — not a grab-bag of unrelated edits.
+- Commit message format: short imperative subject line (≤ 72 chars) + optional body explaining motivation.
+- New screens, routes, integrations, and config changes each get their own commit.
+- Never bundle a feature with unrelated cleanup or formatting fixes.
+- Never commit broken code or half-finished features to `main`.
+
+Examples of good subjects:
+- `Add eBay OAuth routes and background data sync`
+- `Wire onboarding to real auth, eBay connect, and Q&A`
+- `Fix sync-status polling race condition`
+
+Examples of bad subjects:
+- `updates` / `wip` / `misc fixes`
+- `Add dashboard and also fix a typo and update readme`
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, clarifying questions come before implementation rather than after mistakes, the README always reflects reality, and `git log` reads like a coherent feature history.
