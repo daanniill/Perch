@@ -96,8 +96,9 @@ Perch/
 | Where in Supabase | Value | Env var |
 |-------------------|-------|---------|
 | Settings → API → Project URL | `https://xxx.supabase.co` | `VITE_SUPABASE_URL` (frontend) + `SUPABASE_URL` (server) |
-| Settings → API → anon public | `eyJ...` | `VITE_SUPABASE_ANON_KEY` (frontend) |
-| Settings → API → service_role secret | `eyJ...` | `SUPABASE_SERVICE_ROLE_KEY` (server — never expose to browser) |
+| Settings → API → Publishable key | `sb_publishable_...` | `VITE_SUPABASE_PUBLISHABLE_KEY` (frontend) + `SUPABASE_PUBLISHABLE_KEY` (server) |
+| Settings → API → Secret key | `sb_secret_...` | `SUPABASE_SECRET_KEY` (server — never expose to browser) |
+| Settings → API → JWKS URL | `https://xxx.supabase.co/auth/v1/.well-known/jwks.json` | `SUPABASE_JWKS_URL` (server) |
 | Settings → Database → Connection string (URI) | `postgresql://...` | `DATABASE_URL` (server) |
 
 ### eBay Developer Portal
@@ -119,7 +120,7 @@ Perch/
 ```env
 # Supabase — Settings → API
 VITE_SUPABASE_URL=https://xxx.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJ...
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
 **Backend** — create `server/.env` (copy from `server/.env.example`):
@@ -130,7 +131,9 @@ FRONTEND_URL=http://localhost:5173
 
 # Supabase — Settings → API
 SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJ...   # keep secret — never send to browser
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_SECRET_KEY=sb_secret_...   # keep secret — never send to browser
+SUPABASE_JWKS_URL=https://xxx.supabase.co/auth/v1/.well-known/jwks.json
 
 # Supabase PostgreSQL — Settings → Database → Connection string (URI)
 DATABASE_URL=postgresql://postgres:[password]@db.xxx.supabase.co:5432/postgres
