@@ -120,7 +120,7 @@ function Step1({ onNext }) {
     setError(null)
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/#/onboarding` },
+      options: { redirectTo: window.location.origin },
     })
     if (oauthError) {
       setError('Google sign-in failed. Please try again.')

@@ -33,8 +33,14 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null)
+      // PKCE OAuth callback lands on /?code=xxx — navigate to onboarding once session is ready
+      if (event === 'SIGNED_IN' && new URLSearchParams(window.location.search).has('code')) {
+        window.history.replaceState(null, '', '/')
+        window.location.hash = '#/onboarding'
+        setPage('onboarding')
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
