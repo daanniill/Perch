@@ -54,8 +54,8 @@ export default function App() {
   // Redirect unauthenticated users away from protected routes
   useEffect(() => {
     if (user === null && PROTECTED.has(page)) {
-      window.location.hash = '#/onboarding'
-      setPage('onboarding')
+      window.location.hash = ''
+      setPage('landing')
     }
   }, [user, page])
 
@@ -72,5 +72,5 @@ export default function App() {
   if (page === 'pricing')           return <PerchPricing onNavigate={navigate} />
   if (page === 'analytics')         return <PerchAnalytics onNavigate={navigate} />
   if (page === 'settings')          return <PerchSettings onNavigate={navigate} />
-  return <PerchLanding />
+  return <PerchLanding onNavigate={navigate} />
 }

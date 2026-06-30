@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from './lib/supabase'
 
 // ── data ─────────────────────────────────────────────────────────────────────
 
@@ -104,6 +105,11 @@ function KpiCard({ label, value, delta, up, sparkBars }) {
 }
 
 function Sidebar({ onNavigate }) {
+  async function handleLogout() {
+    window.location.hash = ''
+    await supabase.auth.signOut()
+  }
+
   const navItem = (icon, label, active, onClick) => (
     <div
       onClick={onClick}
@@ -163,10 +169,21 @@ function Sidebar({ onNavigate }) {
 
       <div className="border-t border-[#E7E9EE] pt-[12px] flex items-center gap-[10px]">
         <div className="w-[34px] h-[34px] rounded-[9px] bg-[#16181D] text-white flex items-center justify-center font-semibold text-[13px] shrink-0">JF</div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="text-[13px] font-semibold truncate">Jordan Fields</div>
           <div className="text-[11.5px] text-[#8A93A1] truncate">Jordan's Finds</div>
         </div>
+        <button
+          onClick={handleLogout}
+          title="Sign out"
+          className="shrink-0 w-[30px] h-[30px] rounded-[8px] flex items-center justify-center text-[#A6ADB8] hover:text-[#E53238] hover:bg-[#FCEBEC] transition-colors"
+        >
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 3H3.5A1.5 1.5 0 0 0 2 4.5v9A1.5 1.5 0 0 0 3.5 15H7" />
+            <path d="M12 13l4-4-4-4" />
+            <line x1="16" y1="9" x2="7" y2="9" />
+          </svg>
+        </button>
       </div>
     </aside>
   )

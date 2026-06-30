@@ -1,3 +1,5 @@
+import { supabase } from './lib/supabase'
+
 function CheckIcon({ color = '#5C8A00' }) {
   return (
     <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -36,7 +38,7 @@ function Bullet({ color = '#5C8A00', bg = '#EEF5DC', children }) {
   );
 }
 
-function Nav() {
+function Nav({ onSignIn }) {
   return (
     <header className="sticky top-0 z-20 border-b border-[#EEF0F4]" style={{ background: 'rgba(255,255,255,.82)', backdropFilter: 'blur(12px)' }}>
       <div className="max-w-[1140px] mx-auto px-7 py-[15px] flex items-center justify-between">
@@ -50,10 +52,10 @@ function Nav() {
           <a href="#pricing" className="text-[13.5px] font-medium text-[#5B6470] hover:text-[#16181D] transition-colors">Pricing</a>
         </nav>
         <div className="flex items-center gap-[14px]">
-          <a href="#" className="text-[13.5px] font-semibold text-[#16181D]">Sign in</a>
-          <a href="#" className="text-[13.5px] font-semibold text-white bg-[#3665F3] px-4 py-[9px] rounded-[10px] hover:bg-[#2553c9] transition-colors" style={{ boxShadow: '0 1px 2px rgba(54,101,243,.4)' }}>
+          <button onClick={onSignIn} className="text-[13.5px] font-semibold text-[#16181D] hover:text-[#3665F3] transition-colors">Sign in</button>
+          <button onClick={onSignIn} className="text-[13.5px] font-semibold text-white bg-[#3665F3] px-4 py-[9px] rounded-[10px] hover:bg-[#2553c9] transition-colors" style={{ boxShadow: '0 1px 2px rgba(54,101,243,.4)' }}>
             Start free
-          </a>
+          </button>
         </div>
       </div>
     </header>
@@ -140,7 +142,7 @@ function DashboardMock() {
   );
 }
 
-function Hero() {
+function Hero({ onSignIn }) {
   return (
     <section className="relative overflow-hidden" style={{ background: 'linear-gradient(180deg,#F7FAFF 0%,#fff 70%)' }}>
       <div className="max-w-[1140px] mx-auto px-7 pt-16 pb-0 text-center">
@@ -155,9 +157,9 @@ function Hero() {
           eBay's seller hub is cluttered and hides what matters. Perch gives you a clear view of your whole store — real profit, sharp insights, and AI listings in seconds.
         </p>
         <div className="flex items-center justify-center gap-3 mt-[30px]">
-          <a href="#" className="inline-flex items-center gap-2 text-[15px] font-semibold text-white bg-[#3665F3] px-[26px] py-[14px] rounded-[13px] hover:bg-[#2553c9] transition-colors" style={{ boxShadow: '0 4px 14px -4px rgba(54,101,243,.55)' }}>
+          <button onClick={onSignIn} className="inline-flex items-center gap-2 text-[15px] font-semibold text-white bg-[#3665F3] px-[26px] py-[14px] rounded-[13px] hover:bg-[#2553c9] transition-colors" style={{ boxShadow: '0 4px 14px -4px rgba(54,101,243,.55)' }}>
             Start free <ArrowIcon />
-          </a>
+          </button>
           <a href="#features" className="inline-flex items-center gap-2 text-[15px] font-semibold text-[#16181D] bg-white border border-[#E2E8F5] px-6 py-[14px] rounded-[13px] hover:border-[#16181D] transition-colors">
             See how it works
           </a>
@@ -381,7 +383,7 @@ function PricingTeaser() {
   );
 }
 
-function FinalCTA() {
+function FinalCTA({ onSignIn }) {
   return (
     <section className="max-w-[1140px] mx-auto px-7 py-[88px]">
       <div className="relative rounded-[24px] p-16 text-center overflow-hidden" style={{ background: 'linear-gradient(140deg,#2553c9,#3665F3)' }}>
@@ -394,9 +396,9 @@ function FinalCTA() {
         <h2 className="relative text-[40px] font-extrabold tracking-[-0.03em] text-white leading-[1.12]">See your whole store clearly.</h2>
         <p className="relative text-[17px] text-white/85 mt-4 mx-auto max-w-[480px]">Connect eBay in two minutes and watch your real numbers appear.</p>
         <div className="relative flex items-center justify-center gap-3 mt-[30px]">
-          <a href="#" className="inline-flex items-center gap-2 text-[15px] font-bold text-[#16181D] bg-white px-7 py-[14px] rounded-[13px] hover:bg-[#EAEBEF] transition-colors">
+          <button onClick={onSignIn} className="inline-flex items-center gap-2 text-[15px] font-bold text-[#16181D] bg-white px-7 py-[14px] rounded-[13px] hover:bg-[#EAEBEF] transition-colors">
             Start free
-          </a>
+          </button>
           <a href="#pricing" className="inline-flex items-center text-[15px] font-semibold text-white border border-white/50 px-6 py-[14px] rounded-[13px] hover:bg-white/10 transition-colors">
             View pricing
           </a>
@@ -406,7 +408,7 @@ function FinalCTA() {
   );
 }
 
-function Footer() {
+function Footer({ onSignIn }) {
   return (
     <footer className="border-t border-[#F1F3F6]">
       <div className="max-w-[1140px] mx-auto px-7 py-10 flex items-center justify-between flex-wrap gap-5">
@@ -416,9 +418,10 @@ function Footer() {
           <span className="text-[12.5px] text-[#A6ADB8] ml-[6px]">A better eBay seller dashboard</span>
         </div>
         <div className="flex gap-[26px]">
-          {[['#features', 'Features'], ['#pricing', 'Pricing'], ['#', 'Sign up'], ['#', 'Sign in']].map(([href, label]) => (
-            <a key={label} href={href} className="text-[13px] text-[#5B6470] hover:text-[#16181D] transition-colors">{label}</a>
-          ))}
+          <a href="#features" className="text-[13px] text-[#5B6470] hover:text-[#16181D] transition-colors">Features</a>
+          <a href="#pricing" className="text-[13px] text-[#5B6470] hover:text-[#16181D] transition-colors">Pricing</a>
+          <button onClick={onSignIn} className="text-[13px] text-[#5B6470] hover:text-[#16181D] transition-colors">Sign up</button>
+          <button onClick={onSignIn} className="text-[13px] text-[#5B6470] hover:text-[#16181D] transition-colors">Sign in</button>
         </div>
         <div className="text-[12px] text-[#A6ADB8]">© 2026 Perch · Not affiliated with eBay Inc.</div>
       </div>
@@ -426,19 +429,26 @@ function Footer() {
   );
 }
 
-export default function PerchLanding() {
+export default function PerchLanding({ onNavigate }) {
+  async function handleSignIn() {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    })
+  }
+
   return (
     <div className="bg-white overflow-x-hidden">
-      <Nav />
-      <Hero />
+      <Nav onSignIn={handleSignIn} />
+      <Hero onSignIn={handleSignIn} />
       <TrustStrip />
       <Problem />
       <Features />
       <HowItWorks />
       <Testimonial />
       <PricingTeaser />
-      <FinalCTA />
-      <Footer />
+      <FinalCTA onSignIn={handleSignIn} />
+      <Footer onSignIn={handleSignIn} />
     </div>
   );
 }
