@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useUser } from '@stackframe/stack'
+import { supabase } from './lib/supabase'
 import PerchLanding from './PerchLanding'
 import PerchDashboard from './PerchDashboard'
 import PerchOnboarding from './PerchOnboarding'
@@ -27,8 +27,17 @@ function getPage() {
 
 export default function App() {
   const [page, setPage] = useState(getPage)
-  // or: 'return-null' means useUser() returns null (not a redirect) when logged out
-  const user = useUser({ or: 'return-null' })
+  const [user, setUser] = useState(undefined) // undefined = loading, null = logged out
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     const handler = () => setPage(getPage())

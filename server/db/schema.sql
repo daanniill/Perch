@@ -1,13 +1,11 @@
--- Run once in the Neon SQL editor.
--- Neon Auth automatically creates neon_auth.users_sync — do NOT create a users table.
--- All user_id columns reference Stack Auth's user ID (a TEXT string like "user_abc123").
-
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Run once in the Supabase SQL editor.
+-- user_id columns reference auth.users(id) — Supabase's built-in auth table.
+-- Supabase user IDs are UUIDs.
 
 -- Short Q&A collected in Step 4 (Preferences)
 CREATE TABLE IF NOT EXISTS onboarding_responses (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id         TEXT UNIQUE NOT NULL,
+  user_id         UUID UNIQUE NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   categories      TEXT[]       DEFAULT '{}',
   listing_style   VARCHAR(100),
   monthly_goal    INTEGER,
@@ -19,7 +17,7 @@ CREATE TABLE IF NOT EXISTS onboarding_responses (
 -- eBay OAuth tokens per user
 CREATE TABLE IF NOT EXISTS ebay_connections (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id          TEXT UNIQUE NOT NULL,
+  user_id          UUID UNIQUE NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   access_token     TEXT        NOT NULL,
   refresh_token    TEXT        NOT NULL,
   token_expires_at TIMESTAMPTZ NOT NULL,
@@ -33,7 +31,7 @@ CREATE TABLE IF NOT EXISTS ebay_connections (
 -- eBay listings synced via Sell Inventory API
 CREATE TABLE IF NOT EXISTS ebay_listings (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id       TEXT NOT NULL,
+  user_id       UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   ebay_item_id  VARCHAR(255) NOT NULL,
   title         TEXT,
   price         NUMERIC(10,2),
@@ -51,7 +49,7 @@ CREATE TABLE IF NOT EXISTS ebay_listings (
 -- eBay orders synced via Sell Fulfillment API
 CREATE TABLE IF NOT EXISTS ebay_orders (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id         TEXT NOT NULL,
+  user_id         UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   ebay_order_id   VARCHAR(255) NOT NULL,
   total_amount    NUMERIC(10,2),
   currency        VARCHAR(10)  DEFAULT 'USD',

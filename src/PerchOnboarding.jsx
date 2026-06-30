@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useStackApp, useUser } from '@stackframe/stack'
-import { apiFetch } from './lib/stackauth'
+import { supabase, apiFetch } from './lib/supabase'
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -113,21 +112,21 @@ function BrandPanel() {
 // ── step 1: create account ────────────────────────────────────────────────────
 
 function Step1({ onNext }) {
-  const stackApp = useStackApp()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   async function handleGoogle() {
     setLoading(true)
     setError(null)
-    try {
-      await stackApp.signInWithOAuth({ provider: 'google' })
-      // signInWithOAuth redirects — if we reach here the redirect was cancelled
-    } catch (err) {
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/#/onboarding` },
+    })
+    if (oauthError) {
       setError('Google sign-in failed. Please try again.')
-    } finally {
       setLoading(false)
     }
+    // signInWithOAuth redirects on success
   }
 
   return (
@@ -165,7 +164,7 @@ function Step1({ onNext }) {
       <div className="text-center text-[12.5px] text-[#A6ADB8] mt-[14px]">
         Already have an account?{' '}
         <span
-          onClick={() => stackApp.signInWithOAuth({ provider: 'google' })}
+          onClick={handleGoogle}
           className="text-[#3665F3] font-semibold cursor-pointer"
         >
           Sign in
@@ -530,17 +529,18 @@ function Step4({ onNext, onBack }) {
 // ── step 5: done ──────────────────────────────────────────────────────────────
 
 function Step5({ onGoToDashboard }) {
-  const user = useUser({ or: 'return-null' })
+  const [user, setUser] = useState(null)
   const [counts, setCounts] = useState({ listingCount: 0, orderCount: 0, storeName: null })
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => setUser(session?.user ?? null))
     apiFetch('/api/ebay/sync-status')
       .then(r => r.ok ? r.json() : null)
       .then(d => d && setCounts({ listingCount: d.listingCount, orderCount: d.orderCount, storeName: d.storeName }))
       .catch(() => {})
   }, [])
 
-  const displayName = user?.displayName ?? 'there'
+  const displayName = user?.user_metadata?.full_name ?? user?.email?.split('@')[0] ?? 'there'
   const storeName = counts.storeName ?? 'your store'
 
   return (
@@ -585,12 +585,22 @@ function Step5({ onGoToDashboard }) {
 // ── main ──────────────────────────────────────────────────────────────────────
 
 export default function PerchOnboarding({ onNavigate }) {
-  const user = useUser({ or: 'return-null' })
+  const [user, setUser] = useState(undefined) // undefined = loading, null = logged out
   const [step, setStep] = useState(null) // null = loading
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   // Determine which step to resume at
   useEffect(() => {
-    if (user === undefined) return // Stack Auth still loading
+    if (user === undefined) return // still loading
 
     if (!user) {
       setStep(1) // not logged in → account creation

@@ -10,7 +10,7 @@ An eBay seller analytics dashboard — real profit after every fee, AI-powered l
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
 - [Third-Party Setup](#third-party-setup)
-  - [NeonDB + Neon Auth](#neondb--neon-auth)
+  - [Supabase](#supabase)
   - [eBay Developer Portal](#ebay-developer-portal)
 - [Environment Variables](#environment-variables)
 - [Database Schema](#database-schema)
@@ -27,8 +27,8 @@ Perch is a two-process full-stack app:
 |-------|------|------|
 | Frontend | React 19 + Vite + Tailwind CSS | 5173 |
 | Backend | Node.js + Express | 3001 |
-| Database | NeonDB (PostgreSQL) | — |
-| Auth | Neon Auth (Stack Auth) | — |
+| Database | Supabase (PostgreSQL) | — |
+| Auth | Supabase Auth (Google OAuth) | — |
 
 The Vite dev server proxies `/api` and `/auth/ebay` to the Express backend, so the frontend only ever calls relative URLs.
 
@@ -40,9 +40,9 @@ The Vite dev server proxies `/api` and `/auth/ebay` to the Express backend, so t
 Perch/
 ├── src/                         # React frontend
 │   ├── lib/
-│   │   └── stackauth.js         # Stack Auth client + apiFetch helper
+│   │   └── supabase.js          # Supabase client + apiFetch helper
 │   ├── App.jsx                  # Hash-based router + auth guard
-│   ├── main.jsx                 # React root, StackProvider wrapper
+│   ├── main.jsx                 # React root
 │   ├── PerchLanding.jsx         # Marketing landing page
 │   ├── PerchOnboarding.jsx      # 5-step onboarding (auth → eBay → sync → Q&A → done)
 │   ├── PerchDashboard.jsx       # Main dashboard (KPIs, charts, sales)
@@ -58,10 +58,10 @@ Perch/
 │   ├── package.json
 │   ├── .env                     # Backend secrets (not committed)
 │   ├── db/
-│   │   ├── client.js            # pg Pool connected to NeonDB
-│   │   └── schema.sql           # Table definitions (run once in Neon console)
+│   │   ├── client.js            # pg Pool connected to Supabase PostgreSQL
+│   │   └── schema.sql           # Table definitions (run once in Supabase SQL editor)
 │   ├── middleware/
-│   │   └── requireAuth.js       # Verifies Stack Auth tokens
+│   │   └── requireAuth.js       # Verifies Supabase Auth tokens via service role key
 │   └── routes/
 │       ├── ebay.js              # eBay OAuth + data sync
 │       └── user.js              # Onboarding Q&A + user profile
@@ -79,26 +79,26 @@ Perch/
 
 - **Node.js** 18+ (for built-in `fetch` in the Express server)
 - **npm** 9+
-- A [NeonDB](https://neon.tech) account
+- A [Supabase](https://supabase.com) account
 - An [eBay Developer](https://developer.ebay.com) account
 
 ---
 
 ## Third-Party Setup
 
-### NeonDB + Neon Auth
+### Supabase
 
-1. Create a new project at [neon.tech](https://neon.tech). Name the database `perch`.
-2. In your Neon project dashboard go to **Auth** → Enable **Neon Auth**.
-3. Neon Auth is powered by [Stack Auth](https://stack-auth.com). It will open the Stack Auth dashboard — enable the **Google** provider there.
-4. Copy the following credentials:
+1. Create a new project at [supabase.com](https://supabase.com). Note the **Project URL** and **anon key** from **Settings → API**.
+2. In **Authentication → Providers**, enable **Google** and configure your OAuth app credentials from [console.cloud.google.com](https://console.cloud.google.com). Add your Supabase callback URL as an authorized redirect URI in Google's OAuth settings.
+3. Run the schema in the **Supabase SQL Editor** (open `server/db/schema.sql` and paste the full contents).
+4. Copy the credentials you need:
 
-| Where | Value | Env var |
-|-------|-------|---------|
-| Neon → Connection string | `postgresql://...` | `DATABASE_URL` (server) |
-| Neon → Auth tab → Auth URL | `https://...` | `VITE_NEON_AUTH_URL` (frontend) + `NEON_AUTH_URL` (server) |
-
-5. Run the schema in the **Neon SQL Editor** (open `server/db/schema.sql` and paste the full contents). Neon Auth creates `neon_auth.users_sync` automatically — do not create a `users` table manually.
+| Where in Supabase | Value | Env var |
+|-------------------|-------|---------|
+| Settings → API → Project URL | `https://xxx.supabase.co` | `VITE_SUPABASE_URL` (frontend) + `SUPABASE_URL` (server) |
+| Settings → API → anon public | `eyJ...` | `VITE_SUPABASE_ANON_KEY` (frontend) |
+| Settings → API → service_role secret | `eyJ...` | `SUPABASE_SERVICE_ROLE_KEY` (server — never expose to browser) |
+| Settings → Database → Connection string (URI) | `postgresql://...` | `DATABASE_URL` (server) |
 
 ### eBay Developer Portal
 
@@ -117,11 +117,9 @@ Perch/
 **Frontend** — create `.env.local` at the project root (copy from `.env.example`):
 
 ```env
-# All three are in your Neon dashboard → Auth tab
-# (Neon labels them NEXT_PUBLIC_* for Next.js — the values are the same for Vite)
-VITE_NEON_AUTH_URL=https://...
-VITE_STACK_PROJECT_ID=proj_...
-VITE_STACK_PUBLISHABLE_KEY=pck_...
+# Supabase — Settings → API
+VITE_SUPABASE_URL=https://xxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ...
 ```
 
 **Backend** — create `server/.env` (copy from `server/.env.example`):
@@ -130,11 +128,12 @@ VITE_STACK_PUBLISHABLE_KEY=pck_...
 PORT=3001
 FRONTEND_URL=http://localhost:5173
 
-# NeonDB
-DATABASE_URL=postgresql://user:pass@host.neon.tech/perch?sslmode=require
+# Supabase — Settings → API
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...   # keep secret — never send to browser
 
-# Neon Auth — same URL as VITE_NEON_AUTH_URL, no VITE_ prefix
-NEON_AUTH_URL=https://...
+# Supabase PostgreSQL — Settings → Database → Connection string (URI)
+DATABASE_URL=postgresql://postgres:[password]@db.xxx.supabase.co:5432/postgres
 
 # eBay Developer
 EBAY_CLIENT_ID=
@@ -152,7 +151,7 @@ JWT_SECRET=
 
 ## Database Schema
 
-All tables use Stack Auth user IDs (`TEXT`) as the foreign key — there is no custom `users` table.
+All tables use Supabase Auth user IDs (`UUID`) as the foreign key, referencing `auth.users(id)`. There is no custom `users` table.
 
 | Table | Purpose |
 |-------|---------|
@@ -192,7 +191,7 @@ The Vite dev server proxies `/api` and `/auth/ebay` to `http://localhost:3001`, 
 ### First-time flow
 
 1. Navigate to `http://localhost:5173` → click **Get started**
-2. **Step 1** — sign in with Google (powered by Stack Auth)
+2. **Step 1** — sign in with Google (powered by Supabase Auth)
 3. **Step 2** — connect your eBay account (redirects to eBay OAuth)
 4. **Step 3** — eBay data syncs in the background; progress is polled every 2 s
 5. **Step 4** — answer the Q&A (categories, experience level, goal, writing style)
@@ -210,7 +209,7 @@ Returning users are dropped into the correct step automatically based on their a
 |---------|---------|---------|
 | `react` | ^19.2.7 | UI framework |
 | `react-dom` | ^19.2.7 | React DOM renderer |
-| `@stackframe/stack` | ^2.8.108 | Stack Auth React SDK (Google OAuth, session management) |
+| `@supabase/supabase-js` | ^2.x | Supabase client (auth + database) |
 | `@tailwindcss/vite` | ^4.3.1 | Tailwind CSS via Vite plugin |
 | `tailwindcss` | ^4.3.1 | Utility-first CSS framework |
 | `@vitejs/plugin-react` | ^6.0.2 | Vite plugin for React |
@@ -223,7 +222,7 @@ Returning users are dropped into the correct step automatically based on their a
 |---------|---------|---------|
 | `express` | ^4.21.0 | HTTP server and routing |
 | `cors` | ^2.8.5 | Cross-origin resource sharing middleware |
-| `pg` | ^8.13.0 | PostgreSQL client for NeonDB |
-| `jose` | ^5.x | JWKS-based JWT verification for Neon Auth tokens |
+| `pg` | ^8.13.0 | PostgreSQL client for Supabase database |
+| `@supabase/supabase-js` | ^2.x | Supabase Auth token verification (service role) |
 | `jsonwebtoken` | ^9.0.2 | Signs/verifies eBay OAuth state JWT |
 | `dotenv` | ^16.4.0 | Loads environment variables from `.env` |
