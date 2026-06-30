@@ -96,9 +96,7 @@ Perch/
 | Where | Value | Env var |
 |-------|-------|---------|
 | Neon → Connection string | `postgresql://...` | `DATABASE_URL` (server) |
-| Stack Auth → Project ID | `proj_...` | `STACK_PROJECT_ID` (server) + `VITE_STACK_PROJECT_ID` (frontend) |
-| Stack Auth → Publishable client key | `pck_...` | `VITE_STACK_PUBLISHABLE_KEY` (frontend) |
-| Stack Auth → Secret server key | `ssk_...` | `STACK_SECRET_SERVER_KEY` (server) |
+| Neon → Auth tab → Auth URL | `https://...` | `VITE_NEON_AUTH_URL` (frontend) + `NEON_AUTH_URL` (server) |
 
 5. Run the schema in the **Neon SQL Editor** (open `server/db/schema.sql` and paste the full contents). Neon Auth creates `neon_auth.users_sync` automatically — do not create a `users` table manually.
 
@@ -116,14 +114,14 @@ Perch/
 
 ## Environment Variables
 
-**Frontend** — create `.env.local` at the project root:
+**Frontend** — create `.env.local` at the project root (copy from `.env.example`):
 
 ```env
-VITE_STACK_PROJECT_ID=proj_...
-VITE_STACK_PUBLISHABLE_KEY=pck_...
+# From your Neon project dashboard → Auth tab
+VITE_NEON_AUTH_URL=https://...
 ```
 
-**Backend** — create `server/.env`:
+**Backend** — create `server/.env` (copy from `server/.env.example`):
 
 ```env
 PORT=3001
@@ -132,9 +130,8 @@ FRONTEND_URL=http://localhost:5173
 # NeonDB
 DATABASE_URL=postgresql://user:pass@host.neon.tech/perch?sslmode=require
 
-# Stack Auth (Neon Auth)
-STACK_PROJECT_ID=proj_...
-STACK_SECRET_SERVER_KEY=ssk_...
+# Neon Auth — same URL as VITE_NEON_AUTH_URL, no VITE_ prefix
+NEON_AUTH_URL=https://...
 
 # eBay Developer
 EBAY_CLIENT_ID=
@@ -224,5 +221,6 @@ Returning users are dropped into the correct step automatically based on their a
 | `express` | ^4.21.0 | HTTP server and routing |
 | `cors` | ^2.8.5 | Cross-origin resource sharing middleware |
 | `pg` | ^8.13.0 | PostgreSQL client for NeonDB |
+| `jose` | ^5.x | JWKS-based JWT verification for Neon Auth tokens |
 | `jsonwebtoken` | ^9.0.2 | Signs/verifies eBay OAuth state JWT |
 | `dotenv` | ^16.4.0 | Loads environment variables from `.env` |
