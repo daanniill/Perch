@@ -21,9 +21,9 @@ function basicAuth() {
 }
 
 const SCOPES = [
+  'https://api.ebay.com/oauth/api_scope',
   'https://api.ebay.com/oauth/api_scope/sell.inventory.readonly',
   'https://api.ebay.com/oauth/api_scope/sell.fulfillment.readonly',
-  'https://api.ebay.com/oauth/api_scope/sell.finances.readonly',
 ].join(' ')
 
 async function refreshIfNeeded(conn) {
@@ -155,17 +155,20 @@ const authRouter = express.Router()
 
 // GET /auth/ebay/callback — called by eBay after user authorizes
 authRouter.get('/callback', async (req, res) => {
-  const { code, state } = req.query
-  if (!code || !state) return res.status(400).send('Missing code or state')
+  const { code, state, error } = req.query
+  if (error) return res.redirect(`${process.env.FRONTEND_URL}/?ebay=error#/onboarding`)
+  if (!code || !state) return res.redirect(`${process.env.FRONTEND_URL}/?ebay=error#/onboarding`)
 
   let userId
   try {
     const payload = jwt.verify(state, process.env.JWT_SECRET)
     userId = payload.userId
   } catch {
-    return res.status(400).send('Invalid state')
+    return res.redirect(`${process.env.FRONTEND_URL}/?ebay=error#/onboarding`)
   }
 
+  try {
+  console.log('[ebay callback] exchanging code for tokens, userId:', userId)
   // Exchange code for eBay tokens
   const params = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -181,8 +184,9 @@ authRouter.get('/callback', async (req, res) => {
     body: params.toString(),
   })
 
+  console.log('[ebay callback] token exchange status:', tokenRes.status)
   if (!tokenRes.ok) {
-    console.error('[ebay callback]', await tokenRes.text())
+    console.error('[ebay callback] token exchange failed:', await tokenRes.text())
     return res.redirect(`${process.env.FRONTEND_URL}/?ebay=error#/onboarding`)
   }
 
@@ -211,8 +215,13 @@ authRouter.get('/callback', async (req, res) => {
     [userId, tokens.access_token, tokens.refresh_token, expires, ebayUserId, storeName]
   )
 
+  console.log('[ebay callback] success, redirecting to frontend')
   // Put param before # so window.location.search picks it up in the SPA
   res.redirect(`${process.env.FRONTEND_URL}/?ebay=connected#/onboarding`)
+  } catch (err) {
+    console.error('[ebay callback] unexpected error:', err.message)
+    if (!res.headersSent) res.redirect(`${process.env.FRONTEND_URL}/?ebay=error#/onboarding`)
+  }
 })
 
 // ── api sub-router (mounted at /api/ebay, protected by requireAuth) ───────────

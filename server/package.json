@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "dev": "nodemon index.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",
@@ -14,5 +14,8 @@
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

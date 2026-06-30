@@ -1,4 +1,7 @@
 require('dotenv').config()
+
+process.on('uncaughtException', (err) => console.error('[uncaughtException]', err))
+process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', err))
 const express = require('express')
 const cors = require('cors')
 const requireAuth = require('./middleware/requireAuth')
