@@ -117,8 +117,11 @@ Perch/
 **Frontend** — create `.env.local` at the project root (copy from `.env.example`):
 
 ```env
-# From your Neon project dashboard → Auth tab
+# All three are in your Neon dashboard → Auth tab
+# (Neon labels them NEXT_PUBLIC_* for Next.js — the values are the same for Vite)
 VITE_NEON_AUTH_URL=https://...
+VITE_STACK_PROJECT_ID=proj_...
+VITE_STACK_PUBLISHABLE_KEY=pck_...
 ```
 
 **Backend** — create `server/.env` (copy from `server/.env.example`):
