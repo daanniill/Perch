@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { supabase, apiFetch } from './lib/supabase'
 
 // ── formatters ────────────────────────────────────────────────────────────────
@@ -291,12 +291,12 @@ function BestTimeHeatmap() {
         <div />
         {['M','T','W','T','F','S','S'].map((d, i) => <div key={i} className="text-center text-[10px] text-[#9aa3b0] font-semibold">{d}</div>)}
         {[['AM',[.12,.20,.15,.28,.22,.40,.50]],['MID',[.18,.30,.25,.42,.38,.58,.68]],['PM',[.30,.45,.38,.55,.66,.82,1.0]]].map(([label, opacities]) => (
-          <>
-            <div key={label} className="text-[10px] text-[#9aa3b0] font-semibold">{label}</div>
+          <Fragment key={label}>
+            <div className="text-[10px] text-[#9aa3b0] font-semibold">{label}</div>
             {opacities.map((o, i) => (
               <div key={i} className="h-[26px] rounded-[6px]" style={{ background: o === 1 ? '#3665F3' : `rgba(54,101,243,${o})` }} />
             ))}
-          </>
+          </Fragment>
         ))}
       </div>
     </div>

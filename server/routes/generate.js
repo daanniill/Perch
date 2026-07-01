@@ -3,7 +3,11 @@ const Groq = require('groq-sdk')
 const db = require('../db/client')
 
 const router = express.Router()
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+let groq
+function getGroq() {
+  if (!groq) groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+  return groq
+}
 
 // POST /api/generate/listing
 router.post('/listing', async (req, res) => {
@@ -39,7 +43,7 @@ Return ONLY valid JSON with exactly these fields — no markdown fences, no extr
 
     const userMessage = `Item: ${note.trim()}\nCondition: ${condition}${category ? `\nCategory: ${category}` : ''}`
 
-    const completion = await groq.chat.completions.create({
+    const completion = await getGroq().chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       max_tokens: 1024,
       messages: [
