@@ -46,6 +46,26 @@ CREATE TABLE IF NOT EXISTS ebay_listings (
   UNIQUE(user_id, ebay_item_id)
 );
 
+-- AI-generated listing drafts
+CREATE TABLE IF NOT EXISTS generated_listings (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  input_note       TEXT,
+  input_condition  VARCHAR(100),
+  input_category   VARCHAR(255),
+  input_style_match BOOLEAN DEFAULT true,
+  title            TEXT,
+  description      TEXT,
+  specifics        JSONB,
+  suggested_price  NUMERIC(10,2),
+  price_range_low  NUMERIC(10,2),
+  price_range_high NUMERIC(10,2),
+  keywords         TEXT[],
+  shipping_note    TEXT,
+  status           VARCHAR(50) DEFAULT 'draft',
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- eBay orders synced via Sell Fulfillment API
 CREATE TABLE IF NOT EXISTS ebay_orders (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

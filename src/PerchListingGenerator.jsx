@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
+import { apiFetch } from './lib/supabase'
 
 // ── shared ────────────────────────────────────────────────────────────────────
 
@@ -82,11 +83,9 @@ function Sidebar({ onNavigate }) {
 
 // ── left input panel ──────────────────────────────────────────────────────────
 
-function InputPanel({ onGenerate, phase }) {
-  const [note, setNote] = useState("Nike Air Max 90, Infrared colorway, men's US 10. Worn a few times, great condition, comes with the original box.")
+function InputPanel({ note, setNote, styleMatch, setStyleMatch, onGenerate, phase }) {
   const isGenerating = phase === 'generating'
   const isDone = phase === 'done'
-
   const label = isGenerating ? 'Generating…' : isDone ? 'Generate again' : 'Generate listing'
 
   return (
@@ -134,6 +133,7 @@ function InputPanel({ onGenerate, phase }) {
         <textarea
           value={note}
           onChange={e => setNote(e.target.value)}
+          placeholder="E.g. Nike Air Max 90, men's US 10, great condition, comes with box…"
           className="w-full resize-none border border-[#E7E9EE] rounded-[11px] px-[14px] py-[13px] text-[13.5px] leading-[1.5] text-[#16181D] outline-none focus:border-[#3665F3] focus:ring-[3px] focus:ring-[rgba(54,101,243,.12)] transition-all"
           style={{ height: 96, fontFamily: 'inherit' }}
         />
@@ -157,9 +157,12 @@ function InputPanel({ onGenerate, phase }) {
         </div>
 
         {/* style match toggle */}
-        <div className="flex items-center gap-2 mt-[14px] px-[13px] py-[11px] bg-[#F7F9FC] rounded-[10px]">
-          <div className="w-[30px] h-[18px] rounded-full bg-[#3665F3] relative shrink-0">
-            <span className="absolute top-[2px] right-[2px] w-[14px] h-[14px] rounded-full bg-white"/>
+        <div
+          className="flex items-center gap-2 mt-[14px] px-[13px] py-[11px] bg-[#F7F9FC] rounded-[10px] cursor-pointer select-none"
+          onClick={() => setStyleMatch(v => !v)}
+        >
+          <div className="w-[30px] h-[18px] rounded-full relative shrink-0 transition-colors" style={{ background: styleMatch ? '#3665F3' : '#CBD0D8' }}>
+            <span className="absolute top-[2px] transition-all" style={{ right: styleMatch ? 2 : undefined, left: styleMatch ? undefined : 2, width: 14, height: 14, borderRadius: '50%', background: 'white', display: 'block' }}/>
           </div>
           <span className="text-[12.5px] text-[#5B6470]">
             Match my store's writing style <span className="text-[#16181D] font-semibold">(Jordan's Finds)</span>
@@ -168,8 +171,9 @@ function InputPanel({ onGenerate, phase }) {
 
         <button
           onClick={onGenerate}
-          className="w-full mt-4 flex items-center justify-center gap-[9px] text-white font-semibold text-[14px] py-[14px] rounded-[12px] cursor-pointer hover:bg-[#2553c9] transition-colors"
-          style={{ background: '#3665F3', border: 'none', fontFamily: 'inherit', boxShadow: '0 2px 6px rgba(54,101,243,.32)' }}
+          disabled={isGenerating}
+          className="w-full mt-4 flex items-center justify-center gap-[9px] text-white font-semibold text-[14px] py-[14px] rounded-[12px] transition-colors"
+          style={{ background: isGenerating ? '#6B8EF5' : '#3665F3', border: 'none', fontFamily: 'inherit', boxShadow: '0 2px 6px rgba(54,101,243,.32)', cursor: isGenerating ? 'not-allowed' : 'pointer' }}
         >
           {isGenerating && <Spinner />}
           <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -194,13 +198,34 @@ function IdleState() {
       </div>
       <div className="text-[17px] font-bold">Your listing will appear here</div>
       <div className="text-[13.5px] text-[#8A93A1] leading-[1.55] max-w-[340px] mt-2">
-        Perch writes an optimized title, full description, item specifics, and a price backed by real sold comps — ready to publish to eBay.
+        Perch writes an optimized title, full description, item specifics, and a suggested price — ready to publish to eBay.
       </div>
       <div className="flex gap-2 mt-[22px] flex-wrap justify-center">
-        {['SEO title','Item specifics','Price from comps'].map(t => (
+        {['SEO title','Item specifics','AI price estimate'].map(t => (
           <span key={t} className="text-[11.5px] text-[#5B6470] bg-[#F1F3F6] px-[11px] py-[5px] rounded-full">{t}</span>
         ))}
       </div>
+    </div>
+  )
+}
+
+function ErrorState({ message, onRetry }) {
+  return (
+    <div className="h-[620px] flex flex-col items-center justify-center text-center px-10">
+      <div className="w-[48px] h-[48px] rounded-full bg-[#FEF2F2] flex items-center justify-center mb-4">
+        <svg width="22" height="22" viewBox="0 0 18 18" fill="none" stroke="#E53238" strokeWidth="1.7" strokeLinecap="round">
+          <circle cx="9" cy="9" r="7.2"/><line x1="9" y1="5.6" x2="9" y2="9.8"/><circle cx="9" cy="12.2" r=".8" fill="#E53238" stroke="none"/>
+        </svg>
+      </div>
+      <div className="text-[15px] font-semibold text-[#16181D] mb-1">Generation failed</div>
+      <div className="text-[13px] text-[#8A93A1] max-w-[320px] mb-5">{message}</div>
+      <button
+        onClick={onRetry}
+        className="text-[13px] font-semibold text-white px-5 py-[10px] rounded-[10px]"
+        style={{ background: '#3665F3', border: 'none', fontFamily: 'inherit', cursor: 'pointer' }}
+      >
+        Try again
+      </button>
     </div>
   )
 }
@@ -210,7 +235,7 @@ function GeneratingState() {
     <div className="p-6">
       <div className="flex items-center gap-[9px] text-[#3665F3] text-[13px] font-semibold mb-5">
         <Spinner light={false} />
-        Writing your listing &amp; pricing from 38 sold comps…
+        Writing your listing…
       </div>
       <Shimmer h={30} w="78%" rounded={8}/>
       <div className="mt-[14px]"><Shimmer h={14} w="40%" rounded={6}/></div>
@@ -225,12 +250,8 @@ function GeneratingState() {
   )
 }
 
-function DoneState({ onRegenerate }) {
-  const specifics = [
-    ['Brand','Nike'],['Model','Air Max 90'],['US Size','10'],
-    ['Colorway','Infrared'],['Dept.','Men\'s'],['Category','Athletic Shoes'],
-  ]
-  const keywords = ['air max 90','infrared','OG colorway','men\'s sneakers','deadstock']
+function DoneState({ listing, onRegenerate, onSaveDraft, draftSaved }) {
+  const titleLen = listing.title?.length ?? 0
 
   return (
     <div>
@@ -238,7 +259,9 @@ function DoneState({ onRegenerate }) {
       <div className="flex items-center justify-between px-[22px] py-[18px] border-b border-[#F1F3F6]">
         <div className="flex items-center gap-[9px]">
           <span className="text-[15px] font-bold">Generated listing</span>
-          <span className="text-[11px] font-semibold text-[#5C8A00] bg-[#EEF5DC] px-[9px] py-[3px] rounded-full">✓ Matched store voice</span>
+          {listing.styleMatched && (
+            <span className="text-[11px] font-semibold text-[#5C8A00] bg-[#EEF5DC] px-[9px] py-[3px] rounded-full">✓ Matched store voice</span>
+          )}
         </div>
         <button
           onClick={onRegenerate}
@@ -257,38 +280,41 @@ function DoneState({ onRegenerate }) {
         <div>
           <div className="flex items-center justify-between mb-[7px]">
             <span className="text-[11.5px] font-semibold text-[#8A93A1] tracking-[.03em]">TITLE</span>
-            <span className="num text-[11px] text-[#5C8A00] font-semibold">71 / 80</span>
+            <span className="num text-[11px] font-semibold" style={{ color: titleLen > 80 ? '#E53238' : '#5C8A00' }}>{titleLen} / 80</span>
           </div>
           <div className="text-[15.5px] font-semibold leading-[1.4] border border-[#E7E9EE] rounded-[11px] px-[14px] py-[13px]">
-            Nike Air Max 90 Infrared Men's US 10 OG Colorway Running Shoes — With Box
+            {listing.title}
           </div>
         </div>
 
         {/* item specifics */}
-        <div>
-          <span className="text-[11.5px] font-semibold text-[#8A93A1] tracking-[.03em]">ITEM SPECIFICS</span>
-          <div className="grid grid-cols-3 gap-2 mt-[9px]">
-            {specifics.map(([label, val]) => (
-              <div key={label} className="border border-[#EEF0F4] rounded-[10px] px-[11px] py-[9px]">
-                <div className="text-[10.5px] text-[#A6ADB8]">{label}</div>
-                <div className="text-[13px] font-semibold mt-[2px]">{val}</div>
-              </div>
-            ))}
+        {listing.specifics?.length > 0 && (
+          <div>
+            <span className="text-[11.5px] font-semibold text-[#8A93A1] tracking-[.03em]">ITEM SPECIFICS</span>
+            <div className="grid grid-cols-3 gap-2 mt-[9px]">
+              {listing.specifics.map(({ key, value }) => (
+                <div key={key} className="border border-[#EEF0F4] rounded-[10px] px-[11px] py-[9px]">
+                  <div className="text-[10.5px] text-[#A6ADB8]">{key}</div>
+                  <div className="text-[13px] font-semibold mt-[2px]">{value}</div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* suggested price */}
         <div className="rounded-[13px] px-[18px] py-4 flex items-center justify-between" style={{ background: 'linear-gradient(180deg,#F2F6FF,#EAF1FF)', border: '1px solid #D6E3FF' }}>
           <div>
             <div className="text-[11.5px] font-semibold text-[#3665F3] tracking-[.03em]">SUGGESTED PRICE</div>
             <div className="flex items-baseline gap-[9px] mt-1">
-              <span className="num text-[30px] font-bold">$148</span>
-              <span className="num text-[12.5px] text-[#5B6470]">range $132–$165</span>
+              <span className="num text-[30px] font-bold">${listing.suggestedPrice}</span>
+              {listing.priceRangeLow && listing.priceRangeHigh && (
+                <span className="num text-[12.5px] text-[#5B6470]">range ${listing.priceRangeLow}–${listing.priceRangeHigh}</span>
+              )}
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[12px] text-[#5B6470]">from <span className="font-bold text-[#16181D]">38 sold comps</span></div>
-            <div className="text-[11.5px] text-[#8A93A1] mt-[2px]">last 90 days · ~9 days to sell</div>
+            <div className="text-[12px] text-[#8A93A1]">AI estimate</div>
           </div>
         </div>
 
@@ -296,28 +322,26 @@ function DoneState({ onRegenerate }) {
         <div>
           <div className="flex items-center justify-between mb-[7px]">
             <span className="text-[11.5px] font-semibold text-[#8A93A1] tracking-[.03em]">DESCRIPTION</span>
-            <button className="text-[11px] text-[#3665F3] font-semibold cursor-pointer bg-transparent border-none" style={{ fontFamily: 'inherit' }}>Copy</button>
+            <button
+              onClick={() => navigator.clipboard?.writeText(listing.description?.replace(/<[^>]+>/g, '') ?? '')}
+              className="text-[11px] text-[#3665F3] font-semibold cursor-pointer bg-transparent border-none"
+              style={{ fontFamily: 'inherit' }}
+            >Copy</button>
           </div>
-          <div className="border border-[#E7E9EE] rounded-[11px] px-[15px] py-[15px] text-[13px] leading-[1.6] text-[#3A3F47]">
-            <p className="m-0 mb-[10px]">
-              Authentic Nike Air Max 90 in the iconic <strong>"Infrared"</strong> colorway, men's US 10. A grail-status classic with the visible Air cushioning that started it all — clean lines, premium materials, and that unmistakable red pop.
-            </p>
-            <p className="m-0 mb-2 font-semibold text-[#16181D]">Condition &amp; details:</p>
-            <ul className="m-0 mb-[10px] pl-[18px]">
-              <li className="mb-1">Pre-owned, worn only a handful of times — clean uppers, plenty of life left in the soles.</li>
-              <li className="mb-1">Includes original box.</li>
-              <li>Ships fast &amp; secure within 1 business day.</li>
-            </ul>
-            <p className="m-0">Any questions, just message me — happy to send more photos. Thanks for checking out Jordan's Finds! 👟</p>
-          </div>
+          <div
+            className="border border-[#E7E9EE] rounded-[11px] px-[15px] py-[15px] text-[13px] leading-[1.6] text-[#3A3F47]"
+            dangerouslySetInnerHTML={{ __html: listing.description }}
+          />
         </div>
 
         {/* meta row */}
         <div className="flex gap-[10px]">
-          <div className="flex-1 border border-[#EEF0F4] rounded-[10px] px-[13px] py-[11px]">
-            <div className="text-[10.5px] text-[#A6ADB8]">Suggested shipping</div>
-            <div className="text-[12.5px] font-semibold mt-[3px]">USPS Priority · ~$9.20</div>
-          </div>
+          {listing.shippingNote && (
+            <div className="flex-1 border border-[#EEF0F4] rounded-[10px] px-[13px] py-[11px]">
+              <div className="text-[10.5px] text-[#A6ADB8]">Suggested shipping</div>
+              <div className="text-[12.5px] font-semibold mt-[3px]">{listing.shippingNote}</div>
+            </div>
+          )}
           <div className="flex-1 border border-[#EEF0F4] rounded-[10px] px-[13px] py-[11px]">
             <div className="text-[10.5px] text-[#A6ADB8]">Listing health</div>
             <div className="text-[12.5px] font-semibold mt-[3px] text-[#5C8A00]">Strong — ready to post</div>
@@ -325,18 +349,29 @@ function DoneState({ onRegenerate }) {
         </div>
 
         {/* keywords */}
-        <div className="flex flex-wrap gap-[7px]">
-          {keywords.map(k => (
-            <span key={k} className="text-[11.5px] text-[#5B6470] bg-[#F1F3F6] px-[10px] py-[5px] rounded-full">{k}</span>
-          ))}
-        </div>
+        {listing.keywords?.length > 0 && (
+          <div className="flex flex-wrap gap-[7px]">
+            {listing.keywords.map(k => (
+              <span key={k} className="text-[11.5px] text-[#5B6470] bg-[#F1F3F6] px-[10px] py-[5px] rounded-full">{k}</span>
+            ))}
+          </div>
+        )}
 
         {/* actions */}
         <div className="flex gap-[10px] pt-1">
-          <button className="flex-1 bg-white border border-[#E7E9EE] text-[#5B6470] font-semibold text-[13px] py-3 rounded-[11px] cursor-pointer hover:border-[#16181D] hover:text-[#16181D] transition-colors" style={{ fontFamily: 'inherit' }}>
-            Save as draft
+          <button
+            onClick={onSaveDraft}
+            className="flex-1 bg-white border font-semibold text-[13px] py-3 rounded-[11px] cursor-pointer transition-colors"
+            style={{ border: draftSaved ? '1px solid #86B817' : '1px solid #E7E9EE', color: draftSaved ? '#5C8A00' : '#5B6470', fontFamily: 'inherit' }}
+          >
+            {draftSaved ? '✓ Saved!' : 'Save as draft'}
           </button>
-          <button className="flex-[2] flex items-center justify-center gap-2 text-white font-semibold text-[13px] py-3 rounded-[11px] cursor-pointer hover:bg-[#2553c9] transition-colors" style={{ background: '#3665F3', border: 'none', fontFamily: 'inherit', boxShadow: '0 2px 6px rgba(54,101,243,.32)' }}>
+          <button
+            disabled
+            title="Coming soon"
+            className="flex-[2] flex items-center justify-center gap-2 text-white font-semibold text-[13px] py-3 rounded-[11px]"
+            style={{ background: '#A0B4E8', border: 'none', fontFamily: 'inherit', cursor: 'not-allowed' }}
+          >
             Publish to eBay
             <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 9h10M9.5 4.5L14 9l-4.5 4.5"/>
@@ -351,15 +386,59 @@ function DoneState({ onRegenerate }) {
 // ── main ──────────────────────────────────────────────────────────────────────
 
 export default function PerchListingGenerator({ onNavigate }) {
-  const [phase, setPhase] = useState('idle') // idle | generating | done
-  const timerRef = useRef(null)
+  const [phase, setPhase] = useState('idle') // idle | generating | done | error
+  const [note, setNote] = useState('')
+  const [styleMatch, setStyleMatch] = useState(true)
+  const [generatedListing, setGeneratedListing] = useState(null)
+  const [error, setError] = useState(null)
+  const [draftSaved, setDraftSaved] = useState(false)
 
-  function handleGenerate() {
-    clearTimeout(timerRef.current)
+  async function handleGenerate() {
+    if (!note.trim()) return
     setPhase('generating')
-    timerRef.current = setTimeout(() => setPhase('done'), 1700)
+    setError(null)
+    setDraftSaved(false)
+    try {
+      const res = await apiFetch('/api/generate/listing', {
+        method: 'POST',
+        body: JSON.stringify({
+          note,
+          condition: 'Pre-owned — Good',
+          category: null,
+          styleMatch,
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || 'Something went wrong')
+      }
+      const data = await res.json()
+      setGeneratedListing(data)
+      setPhase('done')
+    } catch (e) {
+      setError(e.message)
+      setPhase('error')
+    }
   }
-  useEffect(() => () => clearTimeout(timerRef.current), [])
+
+  async function handleSaveDraft() {
+    if (!generatedListing) return
+    try {
+      await apiFetch('/api/generate/save-draft', {
+        method: 'POST',
+        body: JSON.stringify({
+          note,
+          condition: 'Pre-owned — Good',
+          category: null,
+          styleMatch,
+          ...generatedListing,
+        }),
+      })
+      setDraftSaved(true)
+    } catch {
+      // non-critical — don't disrupt the UI
+    }
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F6F7F9]" style={{ fontFamily: "'Libre Franklin', sans-serif" }}>
@@ -386,13 +465,28 @@ export default function PerchListingGenerator({ onNavigate }) {
         <div className="px-[30px] pb-14 pt-6 max-w-[1320px]">
           <div className="grid gap-[18px] items-start" style={{ gridTemplateColumns: '0.92fr 1.12fr' }}>
 
-            <InputPanel onGenerate={handleGenerate} phase={phase} />
+            <InputPanel
+              note={note}
+              setNote={setNote}
+              styleMatch={styleMatch}
+              setStyleMatch={setStyleMatch}
+              onGenerate={handleGenerate}
+              phase={phase}
+            />
 
             {/* output card */}
             <div className="bg-white border border-[#EEF0F4] rounded-[16px] min-h-[620px]" style={{ boxShadow: '0 1px 2px rgba(16,24,40,.03)' }}>
               {phase === 'idle'       && <IdleState />}
               {phase === 'generating' && <GeneratingState />}
-              {phase === 'done'       && <DoneState onRegenerate={handleGenerate} />}
+              {phase === 'error'      && <ErrorState message={error} onRetry={handleGenerate} />}
+              {phase === 'done'       && generatedListing && (
+                <DoneState
+                  listing={generatedListing}
+                  onRegenerate={handleGenerate}
+                  onSaveDraft={handleSaveDraft}
+                  draftSaved={draftSaved}
+                />
+              )}
             </div>
 
           </div>

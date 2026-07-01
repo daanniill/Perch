@@ -11,6 +11,7 @@ const dashboard  = require('./routes/dashboard')
 const listings   = require('./routes/listings')
 const analytics  = require('./routes/analytics')
 const finances   = require('./routes/finances')
+const generate   = require('./routes/generate')
 
 const app = express()
 
@@ -30,6 +31,7 @@ app.use('/api/dashboard',  requireAuth, dashboard)
 app.use('/api/listings',   requireAuth, listings)
 app.use('/api/analytics',  requireAuth, analytics)
 app.use('/api/finances',   requireAuth, finances)
+app.use('/api/generate',  requireAuth, generate)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => console.log(`Perch server → http://localhost:${PORT}`))
