@@ -5,8 +5,12 @@ process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', 
 const express = require('express')
 const cors = require('cors')
 const requireAuth = require('./middleware/requireAuth')
-const ebay = require('./routes/ebay')
-const user = require('./routes/user')
+const ebay       = require('./routes/ebay')
+const user       = require('./routes/user')
+const dashboard  = require('./routes/dashboard')
+const listings   = require('./routes/listings')
+const analytics  = require('./routes/analytics')
+const finances   = require('./routes/finances')
 
 const app = express()
 
@@ -20,8 +24,12 @@ app.use(cors({
 app.use('/auth/ebay', ebay.auth)
 
 // Protected API routes
-app.use('/api/ebay', requireAuth, ebay.api)
-app.use('/api/user', requireAuth, user)
+app.use('/api/ebay',       requireAuth, ebay.api)
+app.use('/api/user',       requireAuth, user)
+app.use('/api/dashboard',  requireAuth, dashboard)
+app.use('/api/listings',   requireAuth, listings)
+app.use('/api/analytics',  requireAuth, analytics)
+app.use('/api/finances',   requireAuth, finances)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => console.log(`Perch server → http://localhost:${PORT}`))

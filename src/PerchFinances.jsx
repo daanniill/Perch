@@ -1,59 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { apiFetch } from './lib/supabase'
 
-// ── data ─────────────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
-const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-
-const DATA = {
-  '2026': { netK:[5.2,6.1,5.6,7.4,7.9,8.4,0,0,0,0,0,0], cogsR:0.42,  feesR:0.108, shipR:0.06,  refundR:0.022, label:'2026 · YTD', revDelta:'▲ on track',         partial:true  },
-  '2025': { netK:[4.1,3.8,4.6,5.2,5.0,6.1,6.8,7.2,6.4,7.9,9.1,8.3],  cogsR:0.44,  feesR:0.112, shipR:0.063, refundR:0.025, label:'2025',       revDelta:'▲ 19.4% vs 2024', partial:false },
-  '2024': { netK:[2.8,3.1,2.9,3.4,3.6,3.9,4.2,4.0,3.8,4.6,5.4,4.7],  cogsR:0.46,  feesR:0.115, shipR:0.066, refundR:0.028, label:'2024',       revDelta:'first full year', partial:false },
-}
-
-function derive(year) {
-  const d = DATA[year]
-  const netByMonth = d.netK.map(k => k * 1000)
-  const totalNet   = netByMonth.reduce((a, b) => a + b, 0)
-  const costRatio  = d.cogsR + d.feesR + d.shipR + d.refundR
-  const revenue    = totalNet / (1 - costRatio)
-  const cogs       = revenue * d.cogsR
-  const fees       = revenue * d.feesR
-  const shipping   = revenue * d.shipR
-  const refunds    = revenue * d.refundR
-  const margin     = totalNet / revenue * 100
-  const activeMonths = d.partial ? d.netK.filter(k => k > 0).length : 12
-  const maxNet     = Math.max(...netByMonth, 1)
-  const peakIdx    = netByMonth.indexOf(maxNet)
-
-  const fmt = (n) => '$' + Math.round(n).toLocaleString()
-  const pct = (p) => p.toFixed(1) + '%'
-
-  const months = MONTH_NAMES.map((label, i) => {
-    const v = netByMonth[i]
-    const future = d.partial && i >= activeMonths
-    return { label, height: future ? '0%' : (v / maxNet * 100).toFixed(1) + '%', color: i === peakIdx ? '#3665F3' : '#A6BDFF' }
-  })
-
-  const tableRows = MONTH_NAMES.slice(0, activeMonths).map((label, i) => {
-    const net = netByMonth[i]
-    const rev = net / (1 - costRatio)
-    return { month: label, revenue: fmt(rev), cogs: fmt(rev * d.cogsR), fees: fmt(rev * d.feesR), net: fmt(net), margin: (net / rev * 100).toFixed(0) + '%' }
-  })
-
-  return {
-    label: d.label, revDelta: d.revDelta, months, tableRows,
-    pl: {
-      revenue: fmt(revenue), cogs: fmt(cogs), fees: fmt(fees), shipping: fmt(shipping),
-      cogsNeg: '−' + fmt(cogs), feesNeg: '−' + fmt(fees), shippingNeg: '−' + fmt(shipping), refundsNeg: '−' + fmt(refunds),
-      cogsPct: (d.cogsR*100).toFixed(0) + '%', feesPct: (d.feesR*100).toFixed(1) + '%', shipPct: (d.shipR*100).toFixed(1) + '%',
-      net: fmt(totalNet), margin: pct(margin),
-    },
-    comp: {
-      cogsW: pct(cogs/revenue*100), feesW: pct(fees/revenue*100), shipW: pct(shipping/revenue*100), refundW: pct(refunds/revenue*100), profitW: pct(margin),
-      cogsPct: pct(cogs/revenue*100), feesPct: pct(fees/revenue*100), shipPct: pct(shipping/revenue*100), refundPct: pct(refunds/revenue*100), profitPct: pct(margin),
-    },
-  }
-}
+const fmt$    = (n) => n == null ? '—' : '$' + Math.round(n).toLocaleString()
+const fmtPct  = (n) => n == null ? '—' : n.toFixed(1) + '%'
 
 // ── shared ────────────────────────────────────────────────────────────────────
 
@@ -72,7 +23,7 @@ function Sidebar({ onNavigate }) {
   const item = (icon, label, active, onClick) => (
     <div key={label} onClick={onClick}
       className="flex items-center gap-[11px] px-[11px] py-[9px] rounded-[10px] text-[13.5px] cursor-pointer transition-colors"
-      style={active ? { background:'#EAF1FF', color:'#3665F3', fontWeight:600 } : { color:'#5B6470', fontWeight:500 }}>
+      style={active ? { background: '#EAF1FF', color: '#3665F3', fontWeight: 600 } : { color: '#5B6470', fontWeight: 500 }}>
       {icon}{label}
     </div>
   )
@@ -114,40 +65,61 @@ function Sidebar({ onNavigate }) {
 // ── main ──────────────────────────────────────────────────────────────────────
 
 const CARD_COL = '0.8fr 1fr 1fr 1fr 1fr 0.8fr'
+const CURRENT_YEAR = new Date().getFullYear()
+const YEARS = [String(CURRENT_YEAR), String(CURRENT_YEAR - 1), String(CURRENT_YEAR - 2)]
 
 export default function PerchFinances({ onNavigate }) {
-  const [year, setYear] = useState('2026')
-  const { label, revDelta, months, tableRows, pl, comp } = derive(year)
+  const [year,    setYear]    = useState(String(CURRENT_YEAR))
+  const [data,    setData]    = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    apiFetch(`/api/finances/summary?year=${year}`)
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [year])
+
+  const y  = data?.yearly  ?? {}
+  const months = data?.months ?? []
+
+  const maxGp   = Math.max(...months.map(m => m.gross_profit), 1)
+  const peakIdx = months.reduce((best, m, i) => m.gross_profit > (months[best]?.gross_profit ?? 0) ? i : best, 0)
+
+  const activeMonths = months.filter(m => m.revenue > 0)
+  const tableRows = activeMonths.length > 0 ? activeMonths : months
+
+  const label = `${year}${year === String(CURRENT_YEAR) ? ' · YTD' : ''}`
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F6F7F9]" style={{ fontFamily:"'Libre Franklin', sans-serif" }}>
+    <div className="flex h-screen overflow-hidden bg-[#F6F7F9]" style={{ fontFamily: "'Libre Franklin', sans-serif" }}>
       <Sidebar onNavigate={onNavigate} />
 
       <main className="flex-1 overflow-y-auto">
 
         {/* ── header ── */}
         <header className="sticky top-0 z-10 flex items-center justify-between gap-5 px-[30px] py-4 border-b border-[#EAEBEF]"
-          style={{ background:'rgba(246,247,249,.85)', backdropFilter:'blur(8px)' }}>
+          style={{ background: 'rgba(246,247,249,.85)', backdropFilter: 'blur(8px)' }}>
           <div>
             <div className="text-[21px] font-bold tracking-[-0.02em]">Finances</div>
-            <div className="text-[12.5px] text-[#8A93A1] mt-[1px]">Profit &amp; loss · {label} · Jordan's Finds</div>
+            <div className="text-[12.5px] text-[#8A93A1] mt-[1px]">Profit &amp; loss · {label}</div>
           </div>
           <div className="flex items-center gap-[10px]">
-            {/* year switcher */}
             <div className="inline-flex gap-[2px] bg-[#ECEEF1] p-[3px] rounded-[10px]">
-              {['2026','2025','2024'].map(y => {
+              {YEARS.map(y => {
                 const active = y === year
                 return (
                   <button key={y} onClick={() => setYear(y)}
                     className="px-[13px] py-[7px] rounded-[7px] text-[12.5px] font-semibold cursor-pointer transition-all"
-                    style={{ border:'none', fontFamily:'inherit', background: active ? '#fff' : 'transparent', color: active ? '#16181D' : '#8A93A1', boxShadow: active ? '0 1px 2px rgba(16,24,40,.14)' : 'none' }}>
+                    style={{ border: 'none', fontFamily: 'inherit', background: active ? '#fff' : 'transparent', color: active ? '#16181D' : '#8A93A1', boxShadow: active ? '0 1px 2px rgba(16,24,40,.14)' : 'none' }}>
                     {y}
                   </button>
                 )
               })}
             </div>
             <button className="flex items-center gap-[7px] bg-white border border-[#E7E9EE] text-[#5B6470] font-semibold text-[12.5px] px-[13px] py-[9px] rounded-[10px] cursor-pointer hover:border-[#16181D] hover:text-[#16181D] transition-colors"
-              style={{ fontFamily:'inherit' }}>
+              style={{ fontFamily: 'inherit' }}>
               <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 1.5v10M5 7.5L9 11.5l4-4M3 14.5h12"/>
               </svg>
@@ -158,60 +130,58 @@ export default function PerchFinances({ onNavigate }) {
 
         <div className="px-[30px] pb-6 pt-[18px] max-w-[1320px]">
 
-          {/* ── row 1: 5 KPI cards ── */}
-          <div className="grid gap-3" style={{ gridTemplateColumns:'repeat(5,1fr)' }}>
-            {/* Revenue */}
-            <div className="bg-white border border-[#EEF0F4] rounded-[14px] p-[13px_14px]" style={{ boxShadow:'0 1px 2px rgba(16,24,40,.03)' }}>
+          {/* ── row 1: 4 KPI cards (no COGS) ── */}
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
+            <div className="bg-white border border-[#EEF0F4] rounded-[14px] p-[13px_14px]" style={{ boxShadow: '0 1px 2px rgba(16,24,40,.03)' }}>
               <div className="text-[12px] text-[#8A93A1] font-medium">Revenue</div>
-              <div className="num text-[21px] font-bold mt-[5px]">{pl.revenue}</div>
-              <div className="text-[11px] font-semibold mt-[6px] text-[#5C8A00]">{revDelta}</div>
+              <div className="num text-[21px] font-bold mt-[5px]">{loading ? '—' : fmt$(y.revenue)}</div>
+              <div className="text-[11px] text-[#5B6470] mt-[6px]">{label}</div>
             </div>
-            {/* COGS */}
-            <div className="bg-white border border-[#EEF0F4] rounded-[14px] p-[13px_14px]" style={{ boxShadow:'0 1px 2px rgba(16,24,40,.03)' }}>
-              <div className="text-[12px] text-[#8A93A1] font-medium">Cost of goods</div>
-              <div className="num text-[21px] font-bold mt-[5px] text-[#5B6470]">{pl.cogs}</div>
-              <div className="text-[11px] text-[#8A93A1] mt-[6px]">{pl.cogsPct} of revenue</div>
-            </div>
-            {/* Fees */}
-            <div className="bg-white border border-[#EEF0F4] rounded-[14px] p-[13px_14px]" style={{ boxShadow:'0 1px 2px rgba(16,24,40,.03)' }}>
+            <div className="bg-white border border-[#EEF0F4] rounded-[14px] p-[13px_14px]" style={{ boxShadow: '0 1px 2px rgba(16,24,40,.03)' }}>
               <div className="text-[12px] text-[#8A93A1] font-medium">eBay fees</div>
-              <div className="num text-[21px] font-bold mt-[5px] text-[#5B6470]">{pl.fees}</div>
-              <div className="text-[11px] text-[#8A93A1] mt-[6px]">{pl.feesPct} of revenue</div>
+              <div className="num text-[21px] font-bold mt-[5px] text-[#5B6470]">{loading ? '—' : fmt$(y.fees)}</div>
+              <div className="text-[11px] text-[#8A93A1] mt-[6px]">{loading ? '—' : fmtPct(y.fees_pct)} of revenue</div>
             </div>
-            {/* Shipping */}
-            <div className="bg-white border border-[#EEF0F4] rounded-[14px] p-[13px_14px]" style={{ boxShadow:'0 1px 2px rgba(16,24,40,.03)' }}>
+            <div className="bg-white border border-[#EEF0F4] rounded-[14px] p-[13px_14px]" style={{ boxShadow: '0 1px 2px rgba(16,24,40,.03)' }}>
               <div className="text-[12px] text-[#8A93A1] font-medium">Shipping</div>
-              <div className="num text-[21px] font-bold mt-[5px] text-[#5B6470]">{pl.shipping}</div>
-              <div className="text-[11px] text-[#8A93A1] mt-[6px]">{pl.shipPct} of revenue</div>
+              <div className="num text-[21px] font-bold mt-[5px] text-[#5B6470]">{loading ? '—' : fmt$(y.shipping)}</div>
+              <div className="text-[11px] text-[#8A93A1] mt-[6px]">{loading ? '—' : fmtPct(y.shipping_pct)} of revenue</div>
             </div>
-            {/* Net profit — dark card */}
-            <div className="rounded-[14px] p-[13px_14px]" style={{ background:'#16181D', border:'1px solid #16181D' }}>
-              <div className="text-[12px] text-[#A6ADB8] font-medium">Net profit</div>
-              <div className="num text-[21px] font-bold mt-[5px] text-white">{pl.net}</div>
-              <div className="text-[11px] font-semibold mt-[6px]" style={{ color:'#86E0A8' }}>{pl.margin} margin</div>
+            <div className="rounded-[14px] p-[13px_14px]" style={{ background: '#16181D', border: '1px solid #16181D' }}>
+              <div className="text-[12px] text-[#A6ADB8] font-medium">Gross profit</div>
+              <div className="num text-[21px] font-bold mt-[5px] text-white">{loading ? '—' : fmt$(y.gross_profit)}</div>
+              <div className="text-[11px] font-semibold mt-[6px]" style={{ color: '#86E0A8' }}>
+                {loading ? '—' : fmtPct(y.gross_margin)} margin
+              </div>
             </div>
           </div>
 
           {/* ── row 2: bar chart + P&L statement ── */}
-          <div className="grid gap-3 mt-3" style={{ gridTemplateColumns:'1.7fr 1fr' }}>
+          <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: '1.7fr 1fr' }}>
 
-            {/* monthly net profit bar chart */}
-            <div className="bg-white border border-[#EEF0F4] rounded-[16px] p-[18px]" style={{ boxShadow:'0 1px 2px rgba(16,24,40,.03)' }}>
+            {/* monthly gross profit bar chart */}
+            <div className="bg-white border border-[#EEF0F4] rounded-[16px] p-[18px]" style={{ boxShadow: '0 1px 2px rgba(16,24,40,.03)' }}>
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-[15px] font-semibold">Monthly net profit</div>
-                  <div className="text-[12.5px] text-[#8A93A1] mt-[2px]">{label} · after all fees &amp; costs</div>
+                  <div className="text-[15px] font-semibold">Monthly gross profit</div>
+                  <div className="text-[12.5px] text-[#8A93A1] mt-[2px]">{label} · after eBay fees &amp; shipping</div>
                 </div>
                 <div className="text-right">
-                  <div className="num text-[20px] font-bold">{pl.net}</div>
-                  <div className="text-[11.5px] text-[#8A93A1]">total net</div>
+                  <div className="num text-[20px] font-bold">{loading ? '—' : fmt$(y.gross_profit)}</div>
+                  <div className="text-[11.5px] text-[#8A93A1]">total gross</div>
                 </div>
               </div>
-              <div className="flex items-end gap-[9px] mt-[14px]" style={{ height:128 }}>
+              <div className="flex items-end gap-[9px] mt-[14px]" style={{ height: 128 }}>
                 {months.map((m, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center justify-end h-full gap-[6px]">
                     <div className="w-full flex flex-col justify-end h-full">
-                      <div style={{ background: m.color, borderRadius:'4px 4px 0 0', height: m.height, minHeight: m.height === '0%' ? 0 : 3 }}/>
+                      <div style={{
+                        background: i === peakIdx ? '#3665F3' : '#A6BDFF',
+                        borderRadius: '4px 4px 0 0',
+                        height: loading ? '10%' : (m.gross_profit / maxGp * 100).toFixed(1) + '%',
+                        minHeight: m.gross_profit > 0 ? 3 : 0,
+                        opacity: loading ? 0.3 : 1,
+                      }}/>
                     </div>
                     <span className="text-[9.5px] font-medium text-[#9aa3b0]">{m.label}</span>
                   </div>
@@ -220,16 +190,14 @@ export default function PerchFinances({ onNavigate }) {
             </div>
 
             {/* P&L statement */}
-            <div className="bg-white border border-[#EEF0F4] rounded-[16px] p-[18px]" style={{ boxShadow:'0 1px 2px rgba(16,24,40,.03)' }}>
+            <div className="bg-white border border-[#EEF0F4] rounded-[16px] p-[18px]" style={{ boxShadow: '0 1px 2px rgba(16,24,40,.03)' }}>
               <div className="text-[15px] font-semibold">P&amp;L statement</div>
               <div className="text-[12.5px] text-[#8A93A1] mt-[2px]">{label} summary</div>
               <div className="flex flex-col mt-[18px]">
                 {[
-                  { label:'Gross revenue',     val: pl.revenue,     valClass:'font-semibold text-[#16181D]',  rowClass:'font-semibold' },
-                  { label:'− Cost of goods',   val: pl.cogsNeg,     valClass:'text-[#C8553D]' },
-                  { label:'− eBay fees',       val: pl.feesNeg,     valClass:'text-[#C8553D]' },
-                  { label:'− Shipping',        val: pl.shippingNeg, valClass:'text-[#C8553D]' },
-                  { label:'− Refunds & returns', val: pl.refundsNeg, valClass:'text-[#C8553D]' },
+                  { label: 'Gross revenue',  val: loading ? '—' : fmt$(y.revenue),  valClass: 'font-semibold text-[#16181D]', rowClass: 'font-semibold' },
+                  { label: '− eBay fees',    val: loading ? '—' : (y.fees   != null ? '−' + fmt$(y.fees)   : '—'), valClass: 'text-[#C8553D]' },
+                  { label: '− Shipping',     val: loading ? '—' : (y.shipping != null ? '−' + fmt$(y.shipping) : '—'), valClass: 'text-[#C8553D]' },
                 ].map(({ label: l, val, valClass, rowClass }) => (
                   <div key={l} className="flex justify-between py-[7px] border-b border-[#F4F5F7]">
                     <span className={`text-[13px] text-[#5B6470] ${rowClass || ''}`}>{l}</span>
@@ -237,38 +205,39 @@ export default function PerchFinances({ onNavigate }) {
                   </div>
                 ))}
                 <div className="flex justify-between pt-[14px] pb-1 mt-1">
-                  <span className="text-[14px] font-bold">Net profit</span>
-                  <span className="num text-[16px] font-bold text-[#5C8A00]">{pl.net}</span>
+                  <span className="text-[14px] font-bold">Gross profit</span>
+                  <span className="num text-[16px] font-bold text-[#5C8A00]">{loading ? '—' : fmt$(y.gross_profit)}</span>
                 </div>
                 <div className="flex justify-end">
-                  <span className="text-[11.5px] text-[#8A93A1]">{pl.margin} net margin</span>
+                  <span className="text-[11.5px] text-[#8A93A1]">{loading ? '—' : fmtPct(y.gross_margin)} gross margin</span>
+                </div>
+                <div className="mt-[14px] pt-[10px] border-t border-[#F4F5F7]">
+                  <div className="text-[11px] text-[#A6ADB8] leading-[1.5]">
+                    Cost of goods not tracked — add item costs to see true net profit.
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* ── row 3: cost breakdown + monthly table ── */}
-          <div className="grid gap-3 mt-3" style={{ gridTemplateColumns:'1fr 1.7fr' }}>
+          <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: '1fr 1.7fr' }}>
 
             {/* cost composition */}
-            <div className="bg-white border border-[#EEF0F4] rounded-[16px] p-[18px]" style={{ boxShadow:'0 1px 2px rgba(16,24,40,.03)' }}>
+            <div className="bg-white border border-[#EEF0F4] rounded-[16px] p-[18px]" style={{ boxShadow: '0 1px 2px rgba(16,24,40,.03)' }}>
               <div className="text-[15px] font-semibold">Where the money goes</div>
               <div className="text-[12.5px] text-[#8A93A1] mt-[2px]">Per $100 of revenue</div>
               {/* stacked bar */}
               <div className="flex h-[14px] rounded-[7px] overflow-hidden mt-[18px]">
-                <div style={{ width: comp.cogsW,   background:'#3665F3' }}/>
-                <div style={{ width: comp.feesW,   background:'#7BA0FF' }}/>
-                <div style={{ width: comp.shipW,   background:'#A6BDFF' }}/>
-                <div style={{ width: comp.refundW, background:'#E0A11B' }}/>
-                <div style={{ width: comp.profitW, background:'#5C8A00' }}/>
+                <div style={{ width: (y.fees_pct ?? 0) + '%',     background: '#7BA0FF' }}/>
+                <div style={{ width: (y.shipping_pct ?? 0) + '%', background: '#A6BDFF' }}/>
+                <div style={{ width: (y.profit_pct ?? 0) + '%',   background: '#5C8A00' }}/>
               </div>
               {/* legend */}
               <div className="flex flex-col gap-2 mt-[14px]">
                 {[
-                  { color:'#3665F3', label:'Cost of goods', val: comp.cogsPct   },
-                  { color:'#7BA0FF', label:'eBay fees',     val: comp.feesPct   },
-                  { color:'#A6BDFF', label:'Shipping',      val: comp.shipPct   },
-                  { color:'#E0A11B', label:'Refunds',       val: comp.refundPct },
+                  { color: '#7BA0FF', label: 'eBay fees', val: loading ? '—' : fmtPct(y.fees_pct)     },
+                  { color: '#A6BDFF', label: 'Shipping',  val: loading ? '—' : fmtPct(y.shipping_pct) },
                 ].map(({ color, label: l, val }) => (
                   <div key={l} className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-[12.5px] text-[#5B6470]">
@@ -280,16 +249,16 @@ export default function PerchFinances({ onNavigate }) {
                 ))}
                 <div className="flex items-center justify-between pt-[11px] border-t border-[#F1F3F6]">
                   <span className="flex items-center gap-2 text-[13px] font-semibold text-[#16181D]">
-                    <span className="w-[10px] h-[10px] rounded-[3px] shrink-0" style={{ background:'#5C8A00' }}/>
-                    Net profit
+                    <span className="w-[10px] h-[10px] rounded-[3px] shrink-0" style={{ background: '#5C8A00' }}/>
+                    Gross profit
                   </span>
-                  <span className="num text-[13px] font-bold text-[#5C8A00]">{comp.profitPct}</span>
+                  <span className="num text-[13px] font-bold text-[#5C8A00]">{loading ? '—' : fmtPct(y.profit_pct)}</span>
                 </div>
               </div>
             </div>
 
-            {/* monthly breakdown table */}
-            <div className="bg-white border border-[#EEF0F4] rounded-[16px] overflow-hidden" style={{ boxShadow:'0 1px 2px rgba(16,24,40,.03)' }}>
+            {/* monthly breakdown table — Month, Revenue, Fees, Shipping, Gross, Margin */}
+            <div className="bg-white border border-[#EEF0F4] rounded-[16px] overflow-hidden" style={{ boxShadow: '0 1px 2px rgba(16,24,40,.03)' }}>
               <div className="px-[22px] pt-5 pb-3 flex items-center justify-between">
                 <div className="text-[15px] font-semibold">Monthly breakdown</div>
                 <span className="text-[12px] text-[#8A93A1]">{label}</span>
@@ -299,34 +268,38 @@ export default function PerchFinances({ onNavigate }) {
                 style={{ gridTemplateColumns: CARD_COL }}>
                 <span>Month</span>
                 <span className="text-right">Revenue</span>
-                <span className="text-right">COGS</span>
                 <span className="text-right">Fees</span>
-                <span className="text-right">Net</span>
+                <span className="text-right">Shipping</span>
+                <span className="text-right">Gross</span>
                 <span className="text-right">Margin</span>
               </div>
               {/* rows */}
-              <div style={{ maxHeight:194, overflowY:'auto' }}>
-                {tableRows.map(r => (
-                  <div key={r.month} className="grid items-center px-[22px] py-[10px] border-t border-[#F4F5F7] hover:bg-[#FAFBFC] transition-colors"
+              <div style={{ maxHeight: 194, overflowY: 'auto' }}>
+                {loading ? (
+                  <div className="px-[22px] py-[22px] text-[13px] text-[#A6ADB8]">Loading…</div>
+                ) : tableRows.length === 0 ? (
+                  <div className="px-[22px] py-[22px] text-[12.5px] text-[#A6ADB8]">No data for {year}.</div>
+                ) : tableRows.map(r => (
+                  <div key={r.label} className="grid items-center px-[22px] py-[10px] border-t border-[#F4F5F7] hover:bg-[#FAFBFC] transition-colors"
                     style={{ gridTemplateColumns: CARD_COL }}>
-                    <span className="text-[12.5px] font-semibold">{r.month}</span>
-                    <span className="num text-right text-[12.5px] text-[#5B6470]">{r.revenue}</span>
-                    <span className="num text-right text-[12.5px] text-[#5B6470]">{r.cogs}</span>
-                    <span className="num text-right text-[12.5px] text-[#5B6470]">{r.fees}</span>
-                    <span className="num text-right text-[12.5px] font-semibold text-[#5C8A00]">{r.net}</span>
-                    <span className="num text-right text-[12.5px] text-[#5B6470]">{r.margin}</span>
+                    <span className="text-[12.5px] font-semibold">{r.label}</span>
+                    <span className="num text-right text-[12.5px] text-[#5B6470]">{fmt$(r.revenue)}</span>
+                    <span className="num text-right text-[12.5px] text-[#5B6470]">{fmt$(r.fees)}</span>
+                    <span className="num text-right text-[12.5px] text-[#5B6470]">{fmt$(r.shipping)}</span>
+                    <span className="num text-right text-[12.5px] font-semibold text-[#5C8A00]">{fmt$(r.gross_profit)}</span>
+                    <span className="num text-right text-[12.5px] text-[#5B6470]">{r.margin != null ? r.margin + '%' : '—'}</span>
                   </div>
                 ))}
               </div>
               {/* totals row */}
               <div className="grid items-center px-[22px] py-3 bg-[#FAFBFC]"
-                style={{ gridTemplateColumns: CARD_COL, borderTop:'1.5px solid #EEF0F4' }}>
+                style={{ gridTemplateColumns: CARD_COL, borderTop: '1.5px solid #EEF0F4' }}>
                 <span className="text-[12.5px] font-bold">Total</span>
-                <span className="num text-right text-[12.5px] font-bold">{pl.revenue}</span>
-                <span className="num text-right text-[12.5px] font-bold">{pl.cogs}</span>
-                <span className="num text-right text-[12.5px] font-bold">{pl.fees}</span>
-                <span className="num text-right text-[12.5px] font-bold text-[#5C8A00]">{pl.net}</span>
-                <span className="num text-right text-[12.5px] font-bold">{pl.margin}</span>
+                <span className="num text-right text-[12.5px] font-bold">{loading ? '—' : fmt$(y.revenue)}</span>
+                <span className="num text-right text-[12.5px] font-bold">{loading ? '—' : fmt$(y.fees)}</span>
+                <span className="num text-right text-[12.5px] font-bold">{loading ? '—' : fmt$(y.shipping)}</span>
+                <span className="num text-right text-[12.5px] font-bold text-[#5C8A00]">{loading ? '—' : fmt$(y.gross_profit)}</span>
+                <span className="num text-right text-[12.5px] font-bold">{loading ? '—' : fmtPct(y.gross_margin)}</span>
               </div>
             </div>
           </div>

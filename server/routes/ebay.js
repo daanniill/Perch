@@ -61,7 +61,36 @@ async function runSync(userId, accessToken) {
   syncState.set(userId, { syncing: true, progress: 0, listingCount: 0, orderCount: 0 })
 
   try {
-    // --- sync inventory items ---
+    // --- Phase 1: fetch all offers → build price/status/listed_at map keyed by SKU ---
+    const offerMap = {}
+    let offerOffset = 0
+    let offerTotal = 1
+    while (offerOffset < offerTotal) {
+      const r = await fetch(
+        `${ebayBase()}/sell/inventory/v1/offer?limit=100&offset=${offerOffset}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
+      if (!r.ok) break
+      const data = await r.json()
+      offerTotal = data.total ?? 0
+      for (const offer of data.offers ?? []) {
+        if (!offer.sku) continue
+        const rawPrice = offer.pricingSummary?.price?.value ?? offer.price?.value ?? null
+        const st = (offer.status ?? '').toLowerCase()
+        offerMap[offer.sku] = {
+          price:       rawPrice != null ? parseFloat(rawPrice) : null,
+          status:      st === 'published' ? 'active' : st === 'ended' ? 'unsold' : 'draft',
+          listed_at:   offer.listingStartDate ?? null,
+          listing_url: offer.listingId
+            ? `https://www.${process.env.EBAY_ENVIRONMENT === 'production' ? '' : 'sandbox.'}ebay.com/itm/${offer.listingId}`
+            : null,
+        }
+      }
+      offerOffset += (data.offers ?? []).length || 1
+    }
+    syncState.set(userId, { syncing: true, progress: 15, listingCount: 0, orderCount: 0 })
+
+    // --- Phase 2: sync inventory items ---
     let offset = 0
     let total = 1
     let listingCount = 0
@@ -77,24 +106,29 @@ async function runSync(userId, accessToken) {
       const items = data.inventoryItems ?? []
 
       for (const item of items) {
-        const title = item.product?.title ?? null
-        const qty = item.availability?.shipToLocationAvailability?.quantity ?? 0
-        const img = item.product?.imageUrls?.[0] ?? null
+        const title  = item.product?.title ?? null
+        const qty    = item.availability?.shipToLocationAvailability?.quantity ?? 0
+        const img    = item.product?.imageUrls?.[0] ?? null
+        const offer  = offerMap[item.sku] ?? {}
         await db.query(
-          `INSERT INTO ebay_listings (user_id, ebay_item_id, title, quantity, image_url, synced_at)
-           VALUES ($1, $2, $3, $4, $5, NOW())
+          `INSERT INTO ebay_listings
+             (user_id, ebay_item_id, title, quantity, image_url, price, status, listed_at, listing_url, synced_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
            ON CONFLICT (user_id, ebay_item_id) DO UPDATE
-             SET title=$3, quantity=$4, image_url=$5, synced_at=NOW()`,
-          [userId, item.sku, title, qty, img]
+             SET title=$3, quantity=$4, image_url=$5, price=$6, status=$7,
+                 listed_at=$8, listing_url=$9, synced_at=NOW()`,
+          [userId, item.sku, title, qty, img,
+           offer.price ?? null, offer.status ?? 'active',
+           offer.listed_at ?? null, offer.listing_url ?? null]
         )
         listingCount++
       }
 
       offset += items.length || 1
-      syncState.set(userId, { syncing: true, progress: 30, listingCount, orderCount: 0 })
+      syncState.set(userId, { syncing: true, progress: 15 + Math.floor((offset / (total || 1)) * 35), listingCount, orderCount: 0 })
     }
 
-    // --- sync orders ---
+    // --- Phase 3: sync orders ---
     let orderOffset = 0
     let orderTotal = 1
     let orderCount = 0
@@ -110,35 +144,41 @@ async function runSync(userId, accessToken) {
       const orders = data.orders ?? []
 
       for (const order of orders) {
-        const lineItems = order.lineItems ?? []
-        const shipping = lineItems[0]?.deliveryCost?.shippingCost?.value ?? null
-        const fee = order.totalMarketplaceFee?.value ?? null
-        const total = order.totalFeeBasisAmount?.value ?? null
-        const orderedAt = order.creationDate ? new Date(order.creationDate) : null
+        const lineItems  = order.lineItems ?? []
+        const firstItem  = lineItems[0]
+        const shipping   = firstItem?.deliveryCost?.shippingCost?.value ?? null
+        const fee        = order.totalMarketplaceFee?.value ?? null
+        const total      = order.totalFeeBasisAmount?.value ?? null
+        const orderedAt  = order.creationDate ? new Date(order.creationDate) : null
+        const itemTitle  = firstItem?.title ?? null
+        const itemSku    = firstItem?.sku   ?? null
 
         await db.query(
-          `INSERT INTO ebay_orders (user_id, ebay_order_id, total_amount, currency, status, buyer_username, item_count, shipping_cost, ebay_fees, ordered_at, synced_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+          `INSERT INTO ebay_orders
+             (user_id, ebay_order_id, total_amount, currency, status, buyer_username,
+              item_count, shipping_cost, ebay_fees, ordered_at, item_title, item_sku, synced_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
            ON CONFLICT (user_id, ebay_order_id) DO UPDATE
-             SET status=$5, synced_at=NOW()`,
+             SET status=$5, item_title=$11, item_sku=$12, synced_at=NOW()`,
           [
-            userId,
-            order.orderId,
-            total,
+            userId, order.orderId, total,
             order.totalFeeBasisAmount?.currency ?? 'USD',
             order.orderFulfillmentStatus ?? null,
             order.buyer?.username ?? null,
-            lineItems.length,
-            shipping,
-            fee,
-            orderedAt,
+            lineItems.length, shipping, fee, orderedAt,
+            itemTitle, itemSku,
           ]
         )
         orderCount++
       }
 
       orderOffset += orders.length || 1
-      syncState.set(userId, { syncing: true, progress: 70 + Math.floor((orderOffset / orderTotal) * 30), listingCount, orderCount })
+      syncState.set(userId, {
+        syncing: true,
+        progress: 50 + Math.floor((orderOffset / (orderTotal || 1)) * 50),
+        listingCount,
+        orderCount,
+      })
     }
 
     await db.query(`UPDATE ebay_connections SET last_synced_at=NOW() WHERE user_id=$1`, [userId])

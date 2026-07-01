@@ -1,30 +1,26 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { apiFetch } from './lib/supabase'
 
-// ── data ─────────────────────────────────────────────────────────────────────
-
-const LISTINGS = [
-  { id:'1',  name:'Nike Air Max 90 Infrared',       cat:'Sneakers',    sku:'SNK-1042', price:'$148', status:'active', views:312, watchers:24, age:'7d'      },
-  { id:'2',  name:'Sony WH-1000XM4 Headphones',     cat:'Electronics', sku:'ELC-0388', price:'$189', status:'active', views:540, watchers:31, age:'12d'     },
-  { id:'3',  name:"Vintage Levi's 501 — W34",       cat:'Apparel',     sku:'APP-0211', price:'$72',  status:'sold',   views:198, watchers:12, age:'sold 3d' },
-  { id:'4',  name:'Lego Star Wars 75192 (Sealed)',   cat:'Toys',        sku:'TOY-0907', price:'$640', status:'active', views:88,  watchers:41, age:'21d'     },
-  { id:'5',  name:'Carhartt Detroit Jacket — L',     cat:'Apparel',     sku:'APP-0233', price:'$96',  status:'unsold', views:64,  watchers:3,  age:'30d'     },
-  { id:'6',  name:'iPhone 13 128GB — Unlocked',      cat:'Electronics', sku:'ELC-0401', price:'$415', status:'active', views:720, watchers:58, age:'2d'      },
-  { id:'7',  name:'Patagonia Better Sweater — M',    cat:'Apparel',     sku:'APP-0240', price:'$58',  status:'draft',  views:0,   watchers:0,  age:'—'       },
-  { id:'8',  name:'Nintendo Switch OLED',            cat:'Electronics', sku:'ELC-0415', price:'$268', status:'active', views:410, watchers:36, age:'5d'      },
-  { id:'9',  name:'Air Jordan 1 Mid — Black/White',  cat:'Sneakers',    sku:'SNK-1051', price:'$132', status:'sold',   views:256, watchers:19, age:'sold 6d' },
-  { id:'10', name:'Polaroid OneStep Camera',         cat:'Electronics', sku:'ELC-0420', price:'$74',  status:'active', views:120, watchers:9,  age:'9d'      },
-  { id:'11', name:'Vintage Band Tee — XL',           cat:'Apparel',     sku:'APP-0251', price:'$45',  status:'draft',  views:0,   watchers:0,  age:'—'       },
-  { id:'12', name:'Pokémon Booster Box (Sealed)',    cat:'Toys',        sku:'TOY-0912', price:'$390', status:'active', views:612, watchers:73, age:'4d'      },
-]
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 const STATUS = {
-  active: { label:'Active', color:'#3665F3', bg:'#EAF1FF' },
-  sold:   { label:'Sold',   color:'#5C8A00', bg:'#EEF5DC' },
-  draft:  { label:'Draft',  color:'#8A93A1', bg:'#F1F3F6' },
-  unsold: { label:'Ended',  color:'#B45309', bg:'#FBEDD9' },
+  active: { label: 'Active', color: '#3665F3', bg: '#EAF1FF' },
+  sold:   { label: 'Sold',   color: '#5C8A00', bg: '#EEF5DC' },
+  draft:  { label: 'Draft',  color: '#8A93A1', bg: '#F1F3F6' },
+  unsold: { label: 'Ended',  color: '#B45309', bg: '#FBEDD9' },
 }
 
 const TAB_DEFS = [['all','All'],['active','Active'],['sold','Sold'],['draft','Drafts'],['unsold','Ended']]
+
+function ageDays(iso) {
+  if (!iso) return '—'
+  const d = Math.floor((Date.now() - new Date(iso)) / 86400000)
+  return d === 0 ? 'Today' : `${d}d`
+}
+
+function fmt$(n) {
+  return n == null ? '—' : '$' + (+n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
 
 // ── sidebar ───────────────────────────────────────────────────────────────────
 
@@ -43,7 +39,7 @@ function Sidebar({ onNavigate }) {
   const item = (icon, label, active, onClick) => (
     <div key={label} onClick={onClick}
       className="flex items-center gap-[11px] px-[11px] py-[9px] rounded-[10px] text-[13.5px] cursor-pointer transition-colors"
-      style={active ? { background:'#EAF1FF', color:'#3665F3', fontWeight:600 } : { color:'#5B6470', fontWeight:500 }}>
+      style={active ? { background: '#EAF1FF', color: '#3665F3', fontWeight: 600 } : { color: '#5B6470', fontWeight: 500 }}>
       {icon}{label}
     </div>
   )
@@ -88,7 +84,7 @@ function Checkbox({ checked, onClick }) {
   return (
     <div onClick={onClick} className="cursor-pointer">
       <div className="w-[17px] h-[17px] rounded-[5px] flex items-center justify-center"
-        style={checked ? { background:'#3665F3', border:'1px solid #3665F3' } : { background:'#fff', border:'1px solid #CFD5DE' }}>
+        style={checked ? { background: '#3665F3', border: '1px solid #3665F3' } : { background: '#fff', border: '1px solid #CFD5DE' }}>
         {checked && (
           <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M2.5 6.2l2.2 2.3 4.8-5"/>
@@ -104,56 +100,63 @@ function Checkbox({ checked, onClick }) {
 const COL = '28px minmax(150px,1fr) 80px 90px 110px 74px 30px'
 
 export default function PerchListings({ onNavigate }) {
-  const [tab, setTab]           = useState('all')
-  const [query, setQuery]       = useState('')
-  const [selected, setSelected] = useState({})
+  const [tab,        setTab]      = useState('all')
+  const [query,      setQuery]    = useState('')
+  const [selected,   setSelected] = useState({})
+  const [listings,   setListings] = useState([])
+  const [counts,     setCounts]   = useState({ all: 0, active: 0, sold: 0, draft: 0, unsold: 0 })
+  const [total,      setTotal]    = useState(0)
+  const [loading,    setLoading]  = useState(true)
 
-  const toggle = (id) => setSelected(s => {
+  const fetchListings = useCallback(() => {
+    setLoading(true)
+    const params = new URLSearchParams({ status: tab, limit: '100' })
+    if (query) params.set('search', query)
+    apiFetch(`/api/listings?${params}`)
+      .then(r => r.json())
+      .then(d => {
+        setListings(d.listings ?? [])
+        setCounts(d.counts ?? {})
+        setTotal(d.total ?? 0)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [tab, query])
+
+  useEffect(() => { fetchListings() }, [fetchListings])
+
+  const toggle    = (id) => setSelected(s => { const n = { ...s }; if (n[id]) delete n[id]; else n[id] = true; return n })
+  const clearSel  = ()   => setSelected({})
+  const allChecked = listings.length > 0 && listings.every(l => selected[l.id])
+  const toggleAll  = ()  => setSelected(s => {
     const n = { ...s }
-    if (n[id]) delete n[id]; else n[id] = true
+    if (allChecked) listings.forEach(l => delete n[l.id])
+    else            listings.forEach(l => n[l.id] = true)
     return n
   })
-  const clearSel = () => setSelected({})
-
-  const visible = LISTINGS.filter(l =>
-    (tab === 'all' || l.status === tab) &&
-    (query === '' || l.name.toLowerCase().includes(query) ||
-      l.cat.toLowerCase().includes(query) || l.sku.toLowerCase().includes(query))
-  )
-
-  const allChecked = visible.length > 0 && visible.every(l => selected[l.id])
-  const toggleAll  = () => setSelected(s => {
-    const n = { ...s }
-    if (allChecked) visible.forEach(l => delete n[l.id])
-    else            visible.forEach(l => n[l.id] = true)
-    return n
-  })
-
   const selectedCount = Object.keys(selected).length
-  const counts = { all: LISTINGS.length }
-  for (const l of LISTINGS) counts[l.status] = (counts[l.status] || 0) + 1
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F6F7F9]" style={{ fontFamily:"'Libre Franklin', sans-serif" }}>
+    <div className="flex h-screen overflow-hidden bg-[#F6F7F9]" style={{ fontFamily: "'Libre Franklin', sans-serif" }}>
       <Sidebar onNavigate={onNavigate} />
 
       <main className="flex-1 overflow-y-auto">
         {/* header */}
         <header className="sticky top-0 z-10 flex items-center justify-between gap-5 px-[30px] py-4 border-b border-[#EAEBEF]"
-          style={{ background:'rgba(246,247,249,.85)', backdropFilter:'blur(8px)' }}>
+          style={{ background: 'rgba(246,247,249,.85)', backdropFilter: 'blur(8px)' }}>
           <div>
             <div className="text-[21px] font-bold tracking-[-0.02em]">Listings</div>
             <div className="text-[12.5px] text-[#8A93A1] mt-[1px]">
-              7 active · <span className="num">$1,733</span> inventory value · 251 watchers ·{' '}
-              <span className="text-[#B45309] font-semibold">2 ending soon</span>
+              <span className="num font-semibold text-[#16181D]">{counts.active ?? 0}</span> active ·{' '}
+              <span className="num font-semibold text-[#16181D]">{total}</span> total
             </div>
           </div>
           <button
             onClick={() => onNavigate?.('listing-generator')}
             className="flex items-center gap-[7px] text-white font-semibold text-[13px] px-4 py-[10px] rounded-[10px] cursor-pointer hover:bg-[#2553c9] transition-colors"
-            style={{ background:'#3665F3', border:'none', fontFamily:'inherit', boxShadow:'0 1px 2px rgba(54,101,243,.4)' }}
+            style={{ background: '#3665F3', border: 'none', fontFamily: 'inherit', boxShadow: '0 1px 2px rgba(54,101,243,.4)' }}
           >
-            <span className="text-[16px] leading-none" style={{ marginTop:-1 }}>+</span> New listing
+            <span className="text-[16px] leading-none" style={{ marginTop: -1 }}>+</span> New listing
           </button>
         </header>
 
@@ -165,7 +168,7 @@ export default function PerchListings({ onNavigate }) {
               {TAB_DEFS.map(([key, label]) => {
                 const active = tab === key
                 return (
-                  <button key={key} onClick={() => setTab(key)}
+                  <button key={key} onClick={() => { setTab(key); setSelected({}) }}
                     className="flex items-center gap-[6px] px-[13px] py-[7px] rounded-[8px] text-[12.5px] font-semibold cursor-pointer transition-all"
                     style={{
                       border: 'none', fontFamily: 'inherit',
@@ -173,7 +176,7 @@ export default function PerchListings({ onNavigate }) {
                       color: active ? '#16181D' : '#8A93A1',
                       boxShadow: active ? '0 1px 2px rgba(16,24,40,.14)' : 'none',
                     }}>
-                    {label} <span style={{ opacity:.6 }}>{counts[key] || 0}</span>
+                    {label} <span style={{ opacity: .6 }}>{counts[key] ?? 0}</span>
                   </button>
                 )
               })}
@@ -181,16 +184,16 @@ export default function PerchListings({ onNavigate }) {
 
             {/* search + sort */}
             <div className="flex items-center gap-[10px]">
-              <div className="flex items-center gap-2 bg-white border border-[#E7E9EE] rounded-[9px] px-[11px] py-2" style={{ width:230 }}>
+              <div className="flex items-center gap-2 bg-white border border-[#E7E9EE] rounded-[9px] px-[11px] py-2" style={{ width: 230 }}>
                 <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="#A6ADB8" strokeWidth="1.7" strokeLinecap="round">
                   <circle cx="8" cy="8" r="5.4"/><line x1="12.2" y1="12.2" x2="15.5" y2="15.5"/>
                 </svg>
                 <input
                   placeholder="Search listings…"
                   value={query}
-                  onChange={e => setQuery(e.target.value.toLowerCase())}
+                  onChange={e => setQuery(e.target.value)}
                   className="border-none outline-none text-[12.5px] w-full text-[#16181D] bg-transparent"
-                  style={{ fontFamily:'inherit' }}
+                  style={{ fontFamily: 'inherit' }}
                 />
               </div>
               <div className="flex items-center gap-[7px] bg-white border border-[#E7E9EE] rounded-[9px] px-3 py-2 text-[12.5px] text-[#5B6470] cursor-pointer">
@@ -203,20 +206,20 @@ export default function PerchListings({ onNavigate }) {
           </div>
 
           {/* table card */}
-          <div className="bg-white border border-[#EEF0F4] rounded-[16px] overflow-hidden" style={{ boxShadow:'0 1px 2px rgba(16,24,40,.03)' }}>
+          <div className="bg-white border border-[#EEF0F4] rounded-[16px] overflow-hidden" style={{ boxShadow: '0 1px 2px rgba(16,24,40,.03)' }}>
 
             {/* bulk bar */}
             {selectedCount > 0 && (
-              <div className="flex items-center justify-between px-5 py-3 border-b border-[#D6E3FF]" style={{ background:'#EAF1FF' }}>
+              <div className="flex items-center justify-between px-5 py-3 border-b border-[#D6E3FF]" style={{ background: '#EAF1FF' }}>
                 <div className="flex items-center gap-[14px]">
                   <span className="text-[13px] font-semibold text-[#3665F3]">{selectedCount} selected</span>
                   <span className="text-[12.5px] text-[#3665F3] opacity-55">|</span>
                   {['Promote','Edit price','End listing'].map(a => (
-                    <button key={a} className="bg-transparent border-none font-semibold text-[12.5px] text-[#3665F3] cursor-pointer p-0" style={{ fontFamily:'inherit' }}>{a}</button>
+                    <button key={a} className="bg-transparent border-none font-semibold text-[12.5px] text-[#3665F3] cursor-pointer p-0" style={{ fontFamily: 'inherit' }}>{a}</button>
                   ))}
-                  <button className="bg-transparent border-none font-semibold text-[12.5px] text-[#E53238] cursor-pointer p-0" style={{ fontFamily:'inherit' }}>Delete</button>
+                  <button className="bg-transparent border-none font-semibold text-[12.5px] text-[#E53238] cursor-pointer p-0" style={{ fontFamily: 'inherit' }}>Delete</button>
                 </div>
-                <button onClick={clearSel} className="bg-transparent border-none font-semibold text-[12.5px] text-[#5B6470] cursor-pointer" style={{ fontFamily:'inherit' }}>Clear</button>
+                <button onClick={clearSel} className="bg-transparent border-none font-semibold text-[12.5px] text-[#5B6470] cursor-pointer" style={{ fontFamily: 'inherit' }}>Clear</button>
               </div>
             )}
 
@@ -232,10 +235,17 @@ export default function PerchListings({ onNavigate }) {
               <span/>
             </div>
 
+            {/* loading state */}
+            {loading && (
+              <div className="py-[54px] text-center text-[#8A93A1]">
+                <div className="text-[14px] font-semibold text-[#5B6470]">Loading listings…</div>
+              </div>
+            )}
+
             {/* rows */}
-            {visible.map(l => {
+            {!loading && listings.map(l => {
               const checked = !!selected[l.id]
-              const st = STATUS[l.status]
+              const st = STATUS[l.status] ?? STATUS.active
               return (
                 <div key={l.id}
                   className="grid items-center px-5 py-3 border-b border-[#F1F3F6] hover:bg-[#FAFBFC] transition-colors"
@@ -244,23 +254,27 @@ export default function PerchListings({ onNavigate }) {
                   <Checkbox checked={checked} onClick={() => toggle(l.id)} />
 
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-[42px] h-[42px] rounded-[9px] shrink-0 flex items-center justify-center"
-                      style={{ background:'repeating-linear-gradient(45deg,#EEF1F5,#EEF1F5 6px,#E6EAF0 6px,#E6EAF0 12px)' }}>
-                      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C4CBD4" strokeWidth="1.4">
-                        <rect x="2" y="3" width="14" height="12" rx="2"/>
-                        <circle cx="6.4" cy="7" r="1.4"/>
-                        <path d="M3 13l3.5-3.4 2.3 2.1 3-2.8 3.2 3"/>
-                      </svg>
-                    </div>
+                    {l.image_url ? (
+                      <img src={l.image_url} alt="" className="w-[42px] h-[42px] rounded-[9px] shrink-0 object-cover" />
+                    ) : (
+                      <div className="w-[42px] h-[42px] rounded-[9px] shrink-0 flex items-center justify-center"
+                        style={{ background: 'repeating-linear-gradient(45deg,#EEF1F5,#EEF1F5 6px,#E6EAF0 6px,#E6EAF0 12px)' }}>
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#C4CBD4" strokeWidth="1.4">
+                          <rect x="2" y="3" width="14" height="12" rx="2"/>
+                          <circle cx="6.4" cy="7" r="1.4"/>
+                          <path d="M3 13l3.5-3.4 2.3 2.1 3-2.8 3.2 3"/>
+                        </svg>
+                      </div>
+                    )}
                     <div className="min-w-0">
-                      <div className="text-[13px] font-semibold truncate">{l.name}</div>
+                      <div className="text-[13px] font-semibold truncate">{l.title ?? '—'}</div>
                       <div className="text-[11.5px] text-[#9aa3b0]">
-                        <span className="num">{l.sku}</span> · {l.cat}
+                        {l.category ?? 'Uncategorized'}
                       </div>
                     </div>
                   </div>
 
-                  <div className="num text-right text-[13px] font-semibold">{l.price}</div>
+                  <div className="num text-right text-[13px] font-semibold">{fmt$(l.price)}</div>
 
                   <div className="pl-[14px]">
                     <span className="text-[11px] font-semibold px-[9px] py-[3px] rounded-[6px]"
@@ -269,28 +283,10 @@ export default function PerchListings({ onNavigate }) {
                     </span>
                   </div>
 
-                  <div className="text-[12px] text-[#5B6470]">
-                    {l.views > 0 ? (
-                      <div className="flex gap-3 justify-end items-center">
-                        <span className="flex items-center gap-1">
-                          <svg width="13" height="13" viewBox="0 0 18 18" fill="none" stroke="#A6ADB8" strokeWidth="1.5">
-                            <path d="M1.5 9S4 4 9 4s7.5 5 7.5 5-2.5 5-7.5 5S1.5 9 1.5 9Z"/><circle cx="9" cy="9" r="2.1"/>
-                          </svg>
-                          <span className="num">{l.views.toLocaleString()}</span>
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <svg width="13" height="13" viewBox="0 0 18 18" fill="none" stroke="#A6ADB8" strokeWidth="1.5">
-                            <path d="M9 15S2.5 11 2.5 6.6A3.1 3.1 0 0 1 9 5a3.1 3.1 0 0 1 6.5 1.6C15.5 11 9 15 9 15Z"/>
-                          </svg>
-                          <span className="num">{l.watchers}</span>
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="text-right text-[#C4CBD4]">—</div>
-                    )}
-                  </div>
+                  {/* Views/watchers not available from eBay Inventory API */}
+                  <div className="text-right text-[12px] text-[#C4CBD4]">—</div>
 
-                  <div className="num text-right text-[12.5px] text-[#8A93A1]">{l.age}</div>
+                  <div className="num text-right text-[12.5px] text-[#8A93A1]">{ageDays(l.listed_at)}</div>
 
                   <div className="text-right text-[#B6BCC6] font-bold cursor-pointer tracking-[1px]">···</div>
                 </div>
@@ -298,17 +294,19 @@ export default function PerchListings({ onNavigate }) {
             })}
 
             {/* empty state */}
-            {visible.length === 0 && (
+            {!loading && listings.length === 0 && (
               <div className="py-[54px] text-center text-[#8A93A1]">
-                <div className="text-[14px] font-semibold text-[#5B6470]">No listings match</div>
-                <div className="text-[12.5px] mt-1">Try a different tab or search term.</div>
+                <div className="text-[14px] font-semibold text-[#5B6470]">No listings found</div>
+                <div className="text-[12.5px] mt-1">
+                  {total === 0 ? 'Sync your eBay store to see your listings here.' : 'Try a different tab or search term.'}
+                </div>
               </div>
             )}
 
             {/* footer */}
             <div className="flex items-center justify-between px-5 py-[13px] bg-[#FAFBFC]">
               <span className="text-[12px] text-[#8A93A1]">
-                Showing <span className="num font-semibold text-[#16181D]">{visible.length}</span> of <span className="num">12</span> listings
+                Showing <span className="num font-semibold text-[#16181D]">{listings.length}</span> of <span className="num">{tab === 'all' ? total : (counts[tab] ?? 0)}</span> listings
               </span>
               <div className="flex gap-[6px]">
                 {['‹','›'].map(ch => (
