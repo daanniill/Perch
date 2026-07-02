@@ -311,6 +311,21 @@ apiRouter.get('/sync-status', async (req, res) => {
   }
 })
 
+// DELETE /api/ebay/disconnect — removes the eBay connection and clears synced data
+apiRouter.delete('/disconnect', async (req, res) => {
+  try {
+    const userId = req.user.id
+    await db.query(`DELETE FROM ebay_connections WHERE user_id=$1`, [userId])
+    await db.query(`DELETE FROM ebay_listings WHERE user_id=$1`, [userId])
+    await db.query(`DELETE FROM ebay_orders WHERE user_id=$1`, [userId])
+    syncState.delete(userId)
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[ebay/disconnect]', err.message)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // POST /api/ebay/sync — kicks off background sync
 apiRouter.post('/sync', async (req, res) => {
   try {

@@ -1,4 +1,23 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { supabase, apiFetch } from './lib/supabase'
+
+function initials(name) {
+  if (!name) return '?'
+  const parts = name.trim().split(/\s+/)
+  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase()
+}
+
+function timeAgo(iso) {
+  if (!iso) return 'Never'
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000))
+  if (secs < 60) return 'Just now'
+  const mins = Math.floor(secs / 60)
+  if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`
+  const days = Math.floor(hrs / 24)
+  return `${days} day${days === 1 ? '' : 's'} ago`
+}
 
 // ── toggle ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +45,7 @@ function PerchLogo({ size = 26 }) {
   )
 }
 
-function Sidebar({ onNavigate }) {
+function Sidebar({ onNavigate, name, storeName }) {
   const item = (icon, label, active, onClick) => (
     <div key={label} onClick={onClick}
       className="flex items-center gap-[11px] px-[11px] py-[9px] rounded-[10px] text-[13.5px] cursor-pointer transition-colors"
@@ -62,10 +81,10 @@ function Sidebar({ onNavigate }) {
         Settings
       </div>
       <div className="border-t border-[#E7E9EE] pt-3 flex items-center gap-[10px]">
-        <div className="w-[34px] h-[34px] rounded-[9px] bg-[#16181D] text-white flex items-center justify-center font-semibold text-[13px] shrink-0">JF</div>
+        <div className="w-[34px] h-[34px] rounded-[9px] bg-[#16181D] text-white flex items-center justify-center font-semibold text-[13px] shrink-0">{initials(name)}</div>
         <div className="min-w-0">
-          <div className="text-[13px] font-semibold truncate">Jordan Fields</div>
-          <div className="text-[11.5px] text-[#8A93A1] truncate">Jordan's Finds</div>
+          <div className="text-[13px] font-semibold truncate">{name || '—'}</div>
+          <div className="text-[11.5px] text-[#8A93A1] truncate">{storeName || 'No store connected'}</div>
         </div>
       </div>
     </aside>
@@ -93,22 +112,22 @@ function FieldInput({ label, ...props }) {
   )
 }
 
-function AccountSection() {
+function AccountSection({ account, setAccount, currentPassword, setCurrentPassword, newPassword, setNewPassword, onDeleteAccount }) {
   return (
     <div className="flex flex-col gap-4">
       <Card>
         <div className="text-[16px] font-bold">Profile</div>
         <div className="text-[12.5px] text-[#8A93A1] mt-[3px]">This is how you appear inside Perch.</div>
         <div className="flex items-center gap-4 mt-5">
-          <div className="w-[64px] h-[64px] rounded-[16px] bg-[#16181D] text-white flex items-center justify-center font-bold text-[24px] shrink-0">JF</div>
+          <div className="w-[64px] h-[64px] rounded-[16px] bg-[#16181D] text-white flex items-center justify-center font-bold text-[24px] shrink-0">{initials(account.name)}</div>
           <div className="flex gap-[9px]">
             <button className="bg-white border border-[#E0E3E9] text-[#16181D] font-semibold text-[12.5px] px-[14px] py-[9px] rounded-[9px] cursor-pointer hover:border-[#16181D] transition-colors" style={{ fontFamily:'inherit' }}>Upload photo</button>
             <button className="bg-none border-none text-[#8A93A1] font-semibold text-[12.5px] px-[6px] py-[9px] rounded-[9px] cursor-pointer" style={{ fontFamily:'inherit', background:'none' }}>Remove</button>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-[14px] mt-[22px]">
-          <FieldInput label="Full name" defaultValue="Jordan Fields"/>
-          <FieldInput label="Email" defaultValue="jordan@example.com" type="email"/>
+          <FieldInput label="Full name" value={account.name} onChange={e => setAccount(a => ({ ...a, name: e.target.value }))}/>
+          <FieldInput label="Email" type="email" value={account.email} onChange={e => setAccount(a => ({ ...a, email: e.target.value }))}/>
         </div>
       </Card>
 
@@ -116,8 +135,8 @@ function AccountSection() {
         <div className="text-[16px] font-bold">Password</div>
         <div className="text-[12.5px] text-[#8A93A1] mt-[3px]">Use a strong, unique password.</div>
         <div className="grid grid-cols-2 gap-[14px] mt-[18px]">
-          <FieldInput label="Current password" type="password" defaultValue="............"/>
-          <FieldInput label="New password" type="password" placeholder="••••••••••"/>
+          <FieldInput label="Current password" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}/>
+          <FieldInput label="New password" type="password" placeholder="••••••••••" value={newPassword} onChange={e => setNewPassword(e.target.value)}/>
         </div>
       </Card>
 
@@ -127,14 +146,23 @@ function AccountSection() {
             <div className="text-[14px] font-bold text-[#C8553D]">Delete account</div>
             <div className="text-[12.5px] text-[#8A93A1] mt-[3px]">Permanently remove your account and all synced data. This can't be undone.</div>
           </div>
-          <button className="shrink-0 bg-white border border-[#E5B5AD] text-[#C8553D] font-semibold text-[12.5px] px-[16px] py-[10px] rounded-[10px] cursor-pointer hover:bg-[#FCEBEC] transition-colors" style={{ fontFamily:'inherit' }}>Delete</button>
+          <button onClick={onDeleteAccount} className="shrink-0 bg-white border border-[#E5B5AD] text-[#C8553D] font-semibold text-[12.5px] px-[16px] py-[10px] rounded-[10px] cursor-pointer hover:bg-[#FCEBEC] transition-colors" style={{ fontFamily:'inherit' }}>Delete</button>
         </div>
       </Card>
     </div>
   )
 }
 
-function StoreSection() {
+function StoreSection({ store, onSync, onDisconnect }) {
+  if (!store.connected) {
+    return (
+      <Card>
+        <div className="text-[16px] font-bold">Connected store</div>
+        <div className="text-[12.5px] text-[#8A93A1] mt-[3px]">No eBay store connected.</div>
+      </Card>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <Card>
@@ -147,16 +175,16 @@ function StoreSection() {
             ))}
           </span>
           <div className="flex-1 min-w-0">
-            <div className="text-[14px] font-semibold">Jordan's Finds</div>
-            <div className="text-[12px] text-[#8A93A1]">eBay.com · store #fashionfinds_jf</div>
+            <div className="text-[14px] font-semibold">{store.storeName || 'eBay store'}</div>
+            <div className="text-[12px] text-[#8A93A1]">eBay.com</div>
           </div>
           <span className="text-[11.5px] font-semibold text-[#5C8A00] bg-[#EEF5DC] px-[10px] py-1 rounded-full flex items-center gap-[6px] shrink-0">
             <span className="w-[6px] h-[6px] rounded-full bg-[#5C8A00]"/>Connected
           </span>
-          <button className="bg-white border border-[#E0E3E9] text-[#5B6470] font-semibold text-[12.5px] px-[13px] py-2 rounded-[9px] cursor-pointer hover:border-[#C8553D] hover:text-[#C8553D] transition-colors shrink-0" style={{ fontFamily:'inherit' }}>Disconnect</button>
+          <button onClick={onDisconnect} className="bg-white border border-[#E0E3E9] text-[#5B6470] font-semibold text-[12.5px] px-[13px] py-2 rounded-[9px] cursor-pointer hover:border-[#C8553D] hover:text-[#C8553D] transition-colors shrink-0" style={{ fontFamily:'inherit' }}>Disconnect</button>
         </div>
         <div className="grid grid-cols-3 gap-3 mt-[14px]">
-          {[['Listings synced','315',true],['Orders synced','1,240',true],['Last sync','2 min ago',false]].map(([label, val, isNum]) => (
+          {[['Listings synced', store.listingCount ?? 0, true],['Orders synced', store.orderCount ?? 0, true],['Last sync', timeAgo(store.lastSyncedAt), false]].map(([label, val, isNum]) => (
             <div key={label} className="border border-[#EEF0F4] rounded-[11px] p-[13px]">
               <div className="text-[11px] text-[#A6ADB8]">{label}</div>
               <div className={`${isNum ? 'num' : ''} text-[18px] font-bold mt-[3px]`}>{val}</div>
@@ -179,16 +207,27 @@ function StoreSection() {
         <div className="flex items-center justify-between mt-[14px]">
           <div>
             <div className="text-[13.5px] font-semibold">Re-sync now</div>
-            <div className="text-[12px] text-[#8A93A1] mt-[2px]">Force a full refresh of store data.</div>
+            <div className="text-[12px] text-[#8A93A1] mt-[2px]">
+              {store.syncing ? `Syncing… ${store.progress ?? 0}%` : 'Force a full refresh of store data.'}
+            </div>
           </div>
-          <button className="bg-[#3665F3] text-white border-none font-semibold text-[12.5px] px-[15px] py-[9px] rounded-[10px] cursor-pointer hover:bg-[#2553c9] transition-colors" style={{ fontFamily:'inherit' }}>Sync now</button>
+          <button onClick={onSync} disabled={store.syncing} className="bg-[#3665F3] text-white border-none font-semibold text-[12.5px] px-[15px] py-[9px] rounded-[10px] cursor-pointer hover:bg-[#2553c9] transition-colors disabled:opacity-50" style={{ fontFamily:'inherit' }}>
+            {store.syncing ? 'Syncing…' : 'Sync now'}
+          </button>
         </div>
       </Card>
     </div>
   )
 }
 
-function BillingSection({ onNavigate }) {
+function BillingSection({ onNavigate, billing }) {
+  const aiUsed  = billing.usage.aiListings
+  const aiLimit = billing.limits.aiListings
+  const aiPct   = Math.min(100, aiLimit ? (aiUsed / aiLimit) * 100 : 0)
+  const lstUsed  = billing.usage.listingsTracked
+  const lstLimit = billing.limits.listingsTracked
+  const lstPct   = Math.min(100, lstLimit ? (lstUsed / lstLimit) * 100 : 0)
+
   return (
     <div className="flex flex-col gap-4">
       {/* plan card */}
@@ -197,8 +236,10 @@ function BillingSection({ onNavigate }) {
           <div>
             <div className="text-[12px] text-[#A6ADB8] font-semibold tracking-[.03em]">CURRENT PLAN</div>
             <div className="flex items-center gap-[9px] mt-2">
-              <span className="text-[24px] font-bold">Free</span>
-              <span className="text-[11px] font-bold text-[#F5AF02] px-[9px] py-[3px] rounded-full" style={{ background:'rgba(245,175,2,.16)' }}>TRIAL · 9 days left</span>
+              <span className="text-[24px] font-bold">{billing.plan}</span>
+              <span className="text-[11px] font-bold text-[#F5AF02] px-[9px] py-[3px] rounded-full" style={{ background:'rgba(245,175,2,.16)' }}>
+                {billing.trialDaysLeft > 0 ? `TRIAL · ${billing.trialDaysLeft} day${billing.trialDaysLeft === 1 ? '' : 's'} left` : 'TRIAL ENDED'}
+              </span>
             </div>
             <div className="text-[13px] text-[#A6ADB8] mt-2 max-w-[340px] leading-[1.5]">You're on the free plan. Upgrade to unlock profit analytics, fee tracking &amp; unlimited AI listings.</div>
           </div>
@@ -215,17 +256,17 @@ function BillingSection({ onNavigate }) {
           <div>
             <div className="flex justify-between text-[13px] mb-[7px]">
               <span className="text-[#5B6470] font-medium">AI listings generated</span>
-              <span className="num font-semibold">3 / 3</span>
+              <span className="num font-semibold">{aiUsed} / {aiLimit}</span>
             </div>
-            <div className="h-2 bg-[#F1F3F6] rounded-[5px]"><div className="h-full rounded-[5px] bg-[#E0A11B]" style={{ width:'100%' }}/></div>
-            <div className="text-[11.5px] text-[#C8553D] mt-[6px] font-semibold">You've hit your free limit — upgrade for unlimited.</div>
+            <div className="h-2 bg-[#F1F3F6] rounded-[5px]"><div className="h-full rounded-[5px] bg-[#E0A11B]" style={{ width:`${aiPct}%` }}/></div>
+            {aiUsed >= aiLimit && <div className="text-[11.5px] text-[#C8553D] mt-[6px] font-semibold">You've hit your free limit — upgrade for unlimited.</div>}
           </div>
           <div>
             <div className="flex justify-between text-[13px] mb-[7px]">
               <span className="text-[#5B6470] font-medium">Listings tracked</span>
-              <span className="num font-semibold">25 / 25</span>
+              <span className="num font-semibold">{lstUsed} / {lstLimit}</span>
             </div>
-            <div className="h-2 bg-[#F1F3F6] rounded-[5px]"><div className="h-full rounded-[5px] bg-[#E0A11B]" style={{ width:'100%' }}/></div>
+            <div className="h-2 bg-[#F1F3F6] rounded-[5px]"><div className="h-full rounded-[5px] bg-[#E0A11B]" style={{ width:`${lstPct}%` }}/></div>
           </div>
         </div>
       </Card>
@@ -256,11 +297,10 @@ const VOICES = [
   { key:'punchy',       label:'Punchy',        desc:'Short, bold' },
 ]
 
-function PrefsSection() {
-  const [voice, setVoice]       = useState('friendly')
-  const [autoCat, setAutoCat]   = useState(true)
-  const [pricing, setPricing]   = useState(true)
+const CONDITIONS = ['New', 'New other', 'Pre-owned — Excellent', 'Pre-owned — Good', 'Pre-owned — Fair']
+const SHIPPING_OPTIONS = ['USPS Priority', 'USPS Ground Advantage', 'UPS Ground', 'FedEx Ground', 'Local pickup']
 
+function PrefsSection({ prefs, updatePrefs }) {
   return (
     <div className="flex flex-col gap-4">
       <Card>
@@ -268,9 +308,9 @@ function PrefsSection() {
         <div className="text-[12.5px] text-[#8A93A1] mt-[3px]">The voice Perch uses for titles &amp; descriptions.</div>
         <div className="flex gap-[10px] mt-[18px]">
           {VOICES.map(v => {
-            const active = voice === v.key
+            const active = prefs.ai_voice === v.key
             return (
-              <button key={v.key} onClick={() => setVoice(v.key)}
+              <button key={v.key} onClick={() => updatePrefs({ ai_voice: v.key })}
                 className="flex-1 text-left px-[15px] py-[13px] rounded-[12px] cursor-pointer transition-all"
                 style={{ fontFamily:'inherit', border: `1.5px solid ${active ? '#3665F3' : '#E7E9EE'}`, background: active ? '#EAF1FF' : '#fff', color: active ? '#16181D' : '#5B6470' }}>
                 <div className="text-[13.5px] font-semibold">{v.label}</div>
@@ -286,15 +326,19 @@ function PrefsSection() {
         <div className="grid grid-cols-2 gap-[14px] mt-[18px]">
           <div>
             <div className="text-[12px] font-semibold text-[#5B6470] mb-[6px]">Default condition</div>
-            <div className="flex items-center justify-between border border-[#E0E3E9] rounded-[10px] px-[13px] py-[11px] text-[13px] cursor-pointer">
-              Pre-owned — Good <span className="text-[#A6ADB8]">▾</span>
-            </div>
+            <select value={prefs.default_condition} onChange={e => updatePrefs({ default_condition: e.target.value })}
+              className="w-full border border-[#E0E3E9] rounded-[10px] px-[13px] py-[11px] text-[13px] cursor-pointer outline-none"
+              style={{ fontFamily:'inherit' }}>
+              {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
           <div>
             <div className="text-[12px] font-semibold text-[#5B6470] mb-[6px]">Default shipping</div>
-            <div className="flex items-center justify-between border border-[#E0E3E9] rounded-[10px] px-[13px] py-[11px] text-[13px] cursor-pointer">
-              USPS Priority <span className="text-[#A6ADB8]">▾</span>
-            </div>
+            <select value={prefs.default_shipping} onChange={e => updatePrefs({ default_shipping: e.target.value })}
+              className="w-full border border-[#E0E3E9] rounded-[10px] px-[13px] py-[11px] text-[13px] cursor-pointer outline-none"
+              style={{ fontFamily:'inherit' }}>
+              {SHIPPING_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
           </div>
         </div>
         <div className="flex items-center justify-between mt-5 pt-[18px] border-t border-[#F4F5F7]">
@@ -302,14 +346,14 @@ function PrefsSection() {
             <div className="text-[13.5px] font-semibold">Auto-detect category</div>
             <div className="text-[12px] text-[#8A93A1] mt-[2px]">Let Perch pick the best eBay category from photos.</div>
           </div>
-          <Toggle on={autoCat} onToggle={() => setAutoCat(v => !v)}/>
+          <Toggle on={prefs.auto_categorize} onToggle={() => updatePrefs({ auto_categorize: !prefs.auto_categorize })}/>
         </div>
         <div className="flex items-center justify-between mt-[18px] pt-[18px] border-t border-[#F4F5F7]">
           <div>
             <div className="text-[13.5px] font-semibold">Suggest pricing from comps</div>
             <div className="text-[12px] text-[#8A93A1] mt-[2px]">Recommend a price from recent sold listings.</div>
           </div>
-          <Toggle on={pricing} onToggle={() => setPricing(v => !v)}/>
+          <Toggle on={prefs.suggest_pricing} onToggle={() => updatePrefs({ suggest_pricing: !prefs.suggest_pricing })}/>
         </div>
       </Card>
     </div>
@@ -317,17 +361,14 @@ function PrefsSection() {
 }
 
 const NOTIF_DEFS = [
-  { key:'sale',    label:'Item sold',         desc:'When one of your listings sells.' },
-  { key:'returns', label:'Returns & refunds',  desc:'When a buyer opens a return.' },
-  { key:'weekly',  label:'Weekly summary',     desc:'A Monday recap of sales & profit.' },
-  { key:'insights',label:'Perch insights',     desc:'Tips on what to list and when.' },
-  { key:'price',   label:'Price drop alerts',  desc:'When comps for your items move.' },
+  { key:'notif_sale',     label:'Item sold',         desc:'When one of your listings sells.' },
+  { key:'notif_returns',  label:'Returns & refunds',  desc:'When a buyer opens a return.' },
+  { key:'notif_weekly',   label:'Weekly summary',     desc:'A Monday recap of sales & profit.' },
+  { key:'notif_insights', label:'Perch insights',     desc:'Tips on what to list and when.' },
+  { key:'notif_price',    label:'Price drop alerts',  desc:'When comps for your items move.' },
 ]
 
-function NotifSection() {
-  const [notif, setNotif] = useState({ sale:true, returns:true, weekly:true, insights:true, price:false })
-  const toggle = key => setNotif(v => ({ ...v, [key]: !v[key] }))
-
+function NotifSection({ prefs, updatePrefs }) {
   return (
     <Card>
       <div className="text-[16px] font-bold">Notifications</div>
@@ -339,7 +380,7 @@ function NotifSection() {
               <div className="text-[13.5px] font-semibold">{n.label}</div>
               <div className="text-[12px] text-[#8A93A1] mt-[2px]">{n.desc}</div>
             </div>
-            <Toggle on={notif[n.key]} onToggle={() => toggle(n.key)}/>
+            <Toggle on={prefs[n.key]} onToggle={() => updatePrefs({ [n.key]: !prefs[n.key] })}/>
           </div>
         ))}
       </div>
@@ -359,12 +400,148 @@ const SECTIONS = [
 
 // ── main ──────────────────────────────────────────────────────────────────────
 
+const PREF_DEFAULTS = {
+  ai_voice: 'friendly',
+  default_condition: 'Pre-owned — Good',
+  default_shipping: 'USPS Priority',
+  auto_categorize: true,
+  suggest_pricing: true,
+  notif_sale: true,
+  notif_returns: true,
+  notif_weekly: true,
+  notif_insights: true,
+  notif_price: false,
+}
+
+const BILLING_DEFAULTS = {
+  plan: 'Free',
+  trialDaysLeft: 0,
+  limits: { aiListings: 3, listingsTracked: 25 },
+  usage: { aiListings: 0, listingsTracked: 0 },
+}
+
+const STORE_DEFAULTS = { connected: false, storeName: null, listingCount: 0, orderCount: 0, lastSyncedAt: null, syncing: false, progress: 0 }
+
 export default function PerchSettings({ onNavigate }) {
   const [section, setSection] = useState('account')
 
+  const [account, setAccount]                 = useState({ name: '', email: '' })
+  const [accountOriginal, setAccountOriginal]  = useState({ name: '', email: '' })
+  const [currentPassword, setCurrentPassword]  = useState('')
+  const [newPassword, setNewPassword]          = useState('')
+
+  const [store, setStore]     = useState(STORE_DEFAULTS)
+  const [billing, setBilling] = useState(BILLING_DEFAULTS)
+
+  const [prefs, setPrefs]                 = useState(PREF_DEFAULTS)
+  const [prefsOriginal, setPrefsOriginal] = useState(PREF_DEFAULTS)
+
+  const [saveStatus, setSaveStatus] = useState(null) // null | 'saving' | 'saved' | 'error'
+  const syncIntervalRef = useRef(null)
+
+  const fetchAccount = useCallback(() => {
+    apiFetch('/api/user/me').then(r => r.json()).then(d => {
+      const a = { name: d.name ?? '', email: d.email ?? '' }
+      setAccount(a)
+      setAccountOriginal(a)
+    }).catch(() => {})
+  }, [])
+
+  const fetchStore = useCallback(() => {
+    apiFetch('/api/ebay/sync-status').then(r => r.json()).then(setStore).catch(() => {})
+  }, [])
+
+  const fetchBilling = useCallback(() => {
+    apiFetch('/api/user/billing').then(r => r.json()).then(setBilling).catch(() => {})
+  }, [])
+
+  const fetchPrefs = useCallback(() => {
+    apiFetch('/api/user/preferences').then(r => r.json()).then(d => {
+      setPrefs(d)
+      setPrefsOriginal(d)
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetchAccount(); fetchStore(); fetchBilling(); fetchPrefs()
+    return () => clearInterval(syncIntervalRef.current)
+  }, [fetchAccount, fetchStore, fetchBilling, fetchPrefs])
+
+  const updatePrefs = useCallback(patch => setPrefs(p => ({ ...p, ...patch })), [])
+
+  const startSync = useCallback(() => {
+    apiFetch('/api/ebay/sync', { method: 'POST' })
+    setStore(s => ({ ...s, syncing: true, progress: 0 }))
+    clearInterval(syncIntervalRef.current)
+    syncIntervalRef.current = setInterval(async () => {
+      const res = await apiFetch('/api/ebay/sync-status')
+      if (!res.ok) return
+      const data = await res.json()
+      setStore(data)
+      if (!data.syncing) clearInterval(syncIntervalRef.current)
+    }, 2000)
+  }, [])
+
+  const disconnectStore = useCallback(() => {
+    if (!window.confirm("Disconnect your eBay store? This removes synced listings and orders.")) return
+    apiFetch('/api/ebay/disconnect', { method: 'DELETE' }).then(fetchStore)
+  }, [fetchStore])
+
+  const deleteAccount = useCallback(async () => {
+    if (!window.confirm('Permanently delete your account and all data? This cannot be undone.')) return
+    const res = await apiFetch('/api/user/me', { method: 'DELETE' })
+    if (res.ok) {
+      await supabase.auth.signOut()
+      onNavigate?.('landing')
+    }
+  }, [onNavigate])
+
+  const handleSave = useCallback(async () => {
+    setSaveStatus('saving')
+    try {
+      if (section === 'account') {
+        const updates = {}
+        if (account.email !== accountOriginal.email) updates.email = account.email
+        if (account.name !== accountOriginal.name) updates.data = { full_name: account.name }
+        if (Object.keys(updates).length) {
+          const { error } = await supabase.auth.updateUser(updates)
+          if (error) throw error
+        }
+        if (newPassword) {
+          const { error } = await supabase.auth.updateUser({ password: newPassword })
+          if (error) throw error
+          setCurrentPassword('')
+          setNewPassword('')
+        }
+        fetchAccount()
+      } else if (section === 'prefs' || section === 'notif') {
+        const res = await apiFetch('/api/user/preferences', { method: 'PUT', body: JSON.stringify(prefs) })
+        if (!res.ok) throw new Error('Save failed')
+        setPrefsOriginal(prefs)
+      }
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus(null), 2000)
+    } catch {
+      setSaveStatus('error')
+    }
+  }, [section, account, accountOriginal, newPassword, prefs, fetchAccount])
+
+  const handleCancel = useCallback(() => {
+    if (section === 'account') {
+      setAccount(accountOriginal)
+      setCurrentPassword('')
+      setNewPassword('')
+    } else if (section === 'prefs' || section === 'notif') {
+      setPrefs(prefsOriginal)
+    }
+    setSaveStatus(null)
+  }, [section, accountOriginal, prefsOriginal])
+
+  const showSaveBar = section === 'account' || section === 'prefs' || section === 'notif'
+
   return (
     <div className="flex h-screen overflow-hidden bg-[#F6F7F9]" style={{ fontFamily:"'Libre Franklin', sans-serif" }}>
-      <Sidebar onNavigate={onNavigate}/>
+      <Sidebar onNavigate={onNavigate} name={account.name} storeName={store.storeName}/>
 
       <main className="flex-1 overflow-y-auto">
         <header className="sticky top-0 z-10 px-[30px] py-4 border-b border-[#EAEBEF]"
@@ -392,17 +569,28 @@ export default function PerchSettings({ onNavigate }) {
 
           {/* panel */}
           <div>
-            {section === 'account'  && <AccountSection/>}
-            {section === 'store'    && <StoreSection/>}
-            {section === 'billing'  && <BillingSection onNavigate={onNavigate}/>}
-            {section === 'prefs'    && <PrefsSection/>}
-            {section === 'notif'    && <NotifSection/>}
+            {section === 'account' && (
+              <AccountSection account={account} setAccount={setAccount}
+                currentPassword={currentPassword} setCurrentPassword={setCurrentPassword}
+                newPassword={newPassword} setNewPassword={setNewPassword}
+                onDeleteAccount={deleteAccount}/>
+            )}
+            {section === 'store'   && <StoreSection store={store} onSync={startSync} onDisconnect={disconnectStore}/>}
+            {section === 'billing' && <BillingSection onNavigate={onNavigate} billing={billing}/>}
+            {section === 'prefs'   && <PrefsSection prefs={prefs} updatePrefs={updatePrefs}/>}
+            {section === 'notif'   && <NotifSection prefs={prefs} updatePrefs={updatePrefs}/>}
 
             {/* save bar */}
-            <div className="flex items-center justify-end gap-[10px] mt-[18px]">
-              <button className="bg-white border border-[#E0E3E9] text-[#5B6470] font-semibold text-[13px] px-[18px] py-[11px] rounded-[11px] cursor-pointer hover:border-[#16181D] hover:text-[#16181D] transition-colors" style={{ fontFamily:'inherit' }}>Cancel</button>
-              <button className="bg-[#3665F3] text-white border-none font-semibold text-[13px] px-[20px] py-[11px] rounded-[11px] cursor-pointer hover:bg-[#2553c9] transition-colors" style={{ fontFamily:'inherit', boxShadow:'0 2px 6px rgba(54,101,243,.3)' }}>Save changes</button>
-            </div>
+            {showSaveBar && (
+              <div className="flex items-center justify-end gap-[10px] mt-[18px]">
+                {saveStatus === 'saved' && <span className="text-[12.5px] font-semibold text-[#5C8A00] mr-auto">Saved</span>}
+                {saveStatus === 'error' && <span className="text-[12.5px] font-semibold text-[#C8553D] mr-auto">Couldn't save — try again</span>}
+                <button onClick={handleCancel} className="bg-white border border-[#E0E3E9] text-[#5B6470] font-semibold text-[13px] px-[18px] py-[11px] rounded-[11px] cursor-pointer hover:border-[#16181D] hover:text-[#16181D] transition-colors" style={{ fontFamily:'inherit' }}>Cancel</button>
+                <button onClick={handleSave} disabled={saveStatus === 'saving'} className="bg-[#3665F3] text-white border-none font-semibold text-[13px] px-[20px] py-[11px] rounded-[11px] cursor-pointer hover:bg-[#2553c9] transition-colors disabled:opacity-60" style={{ fontFamily:'inherit', boxShadow:'0 2px 6px rgba(54,101,243,.3)' }}>
+                  {saveStatus === 'saving' ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </main>

@@ -66,6 +66,22 @@ CREATE TABLE IF NOT EXISTS generated_listings (
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Per-user Settings preferences (AI voice, listing defaults, notification toggles)
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id           UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  ai_voice          VARCHAR(50)  DEFAULT 'friendly',
+  default_condition VARCHAR(100) DEFAULT 'Pre-owned — Good',
+  default_shipping  VARCHAR(100) DEFAULT 'USPS Priority',
+  auto_categorize   BOOLEAN DEFAULT true,
+  suggest_pricing   BOOLEAN DEFAULT true,
+  notif_sale        BOOLEAN DEFAULT true,
+  notif_returns     BOOLEAN DEFAULT true,
+  notif_weekly      BOOLEAN DEFAULT true,
+  notif_insights    BOOLEAN DEFAULT true,
+  notif_price       BOOLEAN DEFAULT false,
+  updated_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- eBay orders synced via Sell Fulfillment API
 CREATE TABLE IF NOT EXISTS ebay_orders (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
