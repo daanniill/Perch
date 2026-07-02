@@ -282,48 +282,58 @@ apiRouter.get('/auth-url', (req, res) => {
 
 // GET /api/ebay/sync-status
 apiRouter.get('/sync-status', async (req, res) => {
-  const userId = req.user.id
+  try {
+    const userId = req.user.id
 
-  const { rows } = await db.query(
-    `SELECT ec.store_name, ec.last_synced_at,
-            (SELECT COUNT(*) FROM ebay_listings WHERE user_id=$1) AS listing_count,
-            (SELECT COUNT(*) FROM ebay_orders   WHERE user_id=$1) AS order_count
-     FROM ebay_connections ec WHERE ec.user_id=$1`,
-    [userId]
-  )
+    const { rows } = await db.query(
+      `SELECT ec.store_name, ec.last_synced_at,
+              (SELECT COUNT(*) FROM ebay_listings WHERE user_id=$1) AS listing_count,
+              (SELECT COUNT(*) FROM ebay_orders   WHERE user_id=$1) AS order_count
+       FROM ebay_connections ec WHERE ec.user_id=$1`,
+      [userId]
+    )
 
-  const conn = rows[0] ?? null
-  const state = syncState.get(userId) ?? { syncing: false, progress: 0 }
+    const conn = rows[0] ?? null
+    const state = syncState.get(userId) ?? { syncing: false, progress: 0 }
 
-  res.json({
-    connected: !!conn,
-    storeName: conn?.store_name ?? null,
-    lastSyncedAt: conn?.last_synced_at ?? null,
-    syncing: state.syncing,
-    progress: state.progress,
-    listingCount: Number(conn?.listing_count ?? 0),
-    orderCount: Number(conn?.order_count ?? 0),
-  })
+    res.json({
+      connected: !!conn,
+      storeName: conn?.store_name ?? null,
+      lastSyncedAt: conn?.last_synced_at ?? null,
+      syncing: state.syncing,
+      progress: state.progress,
+      listingCount: Number(conn?.listing_count ?? 0),
+      orderCount: Number(conn?.order_count ?? 0),
+    })
+  } catch (err) {
+    console.error('[ebay/sync-status]', err.message)
+    res.status(500).json({ error: 'Internal server error' })
+  }
 })
 
 // POST /api/ebay/sync — kicks off background sync
 apiRouter.post('/sync', async (req, res) => {
-  const userId = req.user.id
-  const current = syncState.get(userId)
-  if (current?.syncing) return res.json({ syncing: true, message: 'Already syncing' })
+  try {
+    const userId = req.user.id
+    const current = syncState.get(userId)
+    if (current?.syncing) return res.json({ syncing: true, message: 'Already syncing' })
 
-  const { rows } = await db.query(
-    `SELECT * FROM ebay_connections WHERE user_id=$1`,
-    [userId]
-  )
-  if (!rows[0]) return res.status(400).json({ error: 'No eBay connection found' })
+    const { rows } = await db.query(
+      `SELECT * FROM ebay_connections WHERE user_id=$1`,
+      [userId]
+    )
+    if (!rows[0]) return res.status(400).json({ error: 'No eBay connection found' })
 
-  const conn = await refreshIfNeeded(rows[0])
+    const conn = await refreshIfNeeded(rows[0])
 
-  // Run async — don't await
-  runSync(userId, conn.access_token)
+    // Run async — don't await
+    runSync(userId, conn.access_token)
 
-  res.json({ syncing: true })
+    res.json({ syncing: true })
+  } catch (err) {
+    console.error('[ebay/sync]', err.message)
+    res.status(500).json({ error: 'Internal server error' })
+  }
 })
 
 module.exports = { auth: authRouter, api: apiRouter }
